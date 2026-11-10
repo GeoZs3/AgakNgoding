@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pohon Pengetahuan</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <div id="page-transition"></div>
+
+    <div id="tree-scene">
+        <div class="door" onclick="bukaPintu()">Masuk</div>
+    </div>
+
+    <div id="bookshelf-scene">
+        <div class="library-room">
+            
+            {% for kategori, daftar_buku in kategori_buku.items() %}
+            <div class="bookshelf-wrapper">
+                <div class="shelf-label">{{ kategori }}</div>
+                <div class="bookshelf">
+                    <div class="books">
+                        {% for buku in daftar_buku %}
+                        <a href="{{ url_for('baca_buku', buku_id=buku['id']) }}" class="book" onclick="bukaBukuAnimasi(event, this)">
+                            
+                            <!-- Tambahan efek cahaya agar tidak error -->
+                            <div class="magic-glow"></div>
+
+                            <div class="book-cover-full">
+                                <img src="{% if buku['foto'] %}{{ buku['foto'] }}{% else %}https://via.placeholder.com/90x90/388e3c/fff?text={{ buku['nama_tanaman'] }}{% endif %}" alt="{{ buku['nama_tanaman'] }}">
+                                <h4>{{ buku['nama_tanaman'] }}</h4>
+                                <p class="latin-name">{{ buku['lokasi'] }}</p>
+                                <p class="lang-info" style="margin-top: 10px; background-color: {% if buku['status'] == 'Hidup' %}#c8e6c9{% else %}#ffcdd2{% endif %}; color: #333;">
+                                    Status: {{ buku['status'] }}
+                                </p>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+        </div>
+    </div>
+
+    <script>
+        function bukaPintu() {
+            const treeScene = document.getElementById('tree-scene');
+            treeScene.classList.add('zoom-in-hidden');
+            setTimeout(() => { treeScene.style.display = 'none'; }, 1200);
+        }
+
+        function bukaBukuAnimasi(event, element) {
+            event.preventDefault(); 
+            const url = element.getAttribute('href');
+            const transitionScreen = document.getElementById('page-transition');
+
+            // Mengunci hover buku lain
+            document.body.classList.add('animasi-berjalan');
+
+            // Kalkulasi posisi tengah layar
+            const rect = element.getBoundingClientRect();
+            const bookCenterX = rect.left + (rect.width / 2);
+            const bookCenterY = rect.top + (rect.height / 2);
+            
+            const screenCenterX = window.innerWidth / 2;
+            const screenCenterY = window.innerHeight / 2;
+            
+            const kompensasiRusuk = 90;
+            const moveX = screenCenterX - bookCenterX + kompensasiRusuk;
+            const moveY = screenCenterY - bookCenterY;
+            
+            element.style.setProperty('--to-center-x', `${moveX}px`);
+            element.style.setProperty('--to-center-y', `${moveY}px`);
+
+            element.classList.add('is-opening');
+            
+            setTimeout(() => { transitionScreen.classList.add('fade-out-active'); }, 2600);
+            setTimeout(() => { window.location.href = url; }, 3000);
+        }
+    </script>
+</body>
+</html>
