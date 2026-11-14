@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Guru &amp; Pengurus (P) - Proyek Adiwiyata</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <div class="parchment-container">
+        <div class="parchment-paper" style="max-width: 480px; min-height: auto;">
+            <div class="parchment-header" style="margin-bottom: 25px;">
+                <div class="parchment-title-area">
+                    <h1 style="font-size: 26px;">Akses Pengurus Adiwiyata</h1>
+                    <p>Khusus Guru &amp; 5 Penanggung Jawab (P) Tanaman</p>
+                </div>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="flash-banner {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form method="POST" class="adiwiyata-form">
+                <div class="form-group" style="margin-bottom: 14px;">
+                    <label for="username">Username / Kode P</label>
+                    <input type="text" id="username" name="username" required autofocus>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label for="password">Kata Sandi</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+
+                <div class="form-actions">
+                    <a href="{{ url_for('main.index', masuk=1) }}" class="btn-back" style="margin-top: 0;">&#8592; Kembali</a>
+                    <button type="submit" class="btn-submit-parchment">Masuk</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</body>
+</html>

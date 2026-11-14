@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 - Lembaran Tidak Ditemukan</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="parchment-container">
+        <div class="parchment-paper" style="min-height: auto; text-align: center;">
+            <div class="parchment-title-area">
+                <h1>404 &mdash; Catatan Tidak Ditemukan</h1>
+                <p>Catatan tanaman yang Anda cari tidak terdaftar dalam arsip perpustakaan.</p>
+            </div>
+            <a href="{{ url_for('main.index', masuk=1) }}" class="btn-back">&#8592; Kembali ke Pohon</a>
+        </div>
+    </div>
+</body>
+</html>

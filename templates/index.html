@@ -3,45 +3,165 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pohon Pengetahuan</title>
+    <title>Pohon Pengetahuan - Proyek Adiwiyata</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
     <div id="page-transition"></div>
 
+    {% if not skip_intro %}
     <div id="tree-scene">
         <div class="door" onclick="bukaPintu()">Masuk</div>
     </div>
+    {% endif %}
 
     <div id="bookshelf-scene">
         <div class="library-room">
-            
-            {% for kategori, daftar_buku in kategori_buku.items() %}
-            <div class="bookshelf-wrapper">
-                <div class="shelf-label">{{ kategori }}</div>
-                <div class="bookshelf">
-                    <div class="books">
-                        {% for buku in daftar_buku %}
-                        <a href="{{ url_for('baca_buku', buku_id=buku['id']) }}" class="book" onclick="bukaBukuAnimasi(event, this)">
-                            
-                            <!-- Tambahan efek cahaya agar tidak error -->
-                            <div class="magic-glow"></div>
 
-                            <div class="book-cover-full">
-                                <img src="{% if buku['foto'] %}{{ buku['foto'] }}{% else %}https://via.placeholder.com/90x90/388e3c/fff?text={{ buku['nama_tanaman'] }}{% endif %}" alt="{{ buku['nama_tanaman'] }}">
-                                <h4>{{ buku['nama_tanaman'] }}</h4>
-                                <p class="latin-name">{{ buku['lokasi'] }}</p>
-                                <p class="lang-info" style="margin-top: 10px; background-color: {% if buku['status'] == 'Hidup' %}#c8e6c9{% else %}#ffcdd2{% endif %}; color: #333;">
-                                    Status: {{ buku['status'] }}
-                                </p>
-                            </div>
-                        </a>
-                        {% endfor %}
-                    </div>
+            <!-- BARIS NAVIGASI PENGURUS (GURU & P) -->
+            <div class="library-top-bar">
+                <div class="library-title-badge">Arsip Inventaris Adiwiyata</div>
+                <div class="library-auth-actions">
+                    {% if g.user %}
+                        <span class="user-badge">{{ g.user['full_name'] }} ({{ g.user['manager_code'] or 'Guru' }})</span>
+                        <a href="{{ url_for('plants.add_plant') }}" class="action-link-btn primary">+ Tambah Tanaman</a>
+                        <a href="{{ url_for('auth.logout') }}" class="action-link-btn">Keluar</a>
+                    {% else %}
+                        <a href="{{ url_for('auth.login') }}" class="action-link-btn">Login Guru / P</a>
+                    {% endif %}
                 </div>
             </div>
-            {% endfor %}
+
+            <!-- SEARCH BAR + DROPDOWN FILTER TAGS 3-STATE (ALA MANGADEX) -->
+            <div class="manga-search-wrapper">
+                <form method="GET" action="{{ url_for('main.index') }}" id="searchTagForm">
+                    <input type="hidden" name="masuk" value="1">
+                    <div id="hiddenTagInputs">
+                        {% for inc in include_tags %}
+                            <input type="hidden" name="inc" value="{{ inc }}">
+                        {% endfor %}
+                        {% for exc in exclude_tags %}
+                            <input type="hidden" name="exc" value="{{ exc }}">
+                        {% endfor %}
+                    </div>
+
+                    <div class="search-controls-row">
+                        <input
+                            type="text"
+                            name="q"
+                            value="{{ search_query }}"
+                            placeholder="Cari nama tanaman, nama ilmiah, atau ID..."
+                            class="manga-search-input"
+                        >
+
+                        <button type="button" class="manga-dropdown-toggle" id="toggleTagsBtn" onclick="toggleTagsDropdown()">
+                            <span>Filter Tags</span>
+                            {% if include_tags %}<span class="count-inc">+{{ include_tags|length }}</span>{% endif %}
+                            {% if exclude_tags %}<span class="count-exc">-{{ exclude_tags|length }}</span>{% endif %}
+                            <span class="chevron">&#9662;</span>
+                        </button>
+
+                        <button type="submit" class="manga-search-btn">Search</button>
+
+                        {% if search_query or include_tags or exclude_tags %}
+                            <a href="{{ url_for('main.index', masuk=1) }}" class="manga-reset-btn">Reset</a>
+                        {% endif %}
+                    </div>
+
+                    <!-- DROPDOWN PANEL TAGS -->
+                    <div class="manga-tags-dropdown" id="tagsDropdownPanel">
+                        <div class="tags-dropdown-header">
+                            <input
+                                type="text"
+                                id="tagQuickFilter"
+                                placeholder="Saring daftar tags..."
+                                oninput="filterTagPills(this.value)"
+                                class="tag-quick-input"
+                            >
+                            <span class="tags-legend">
+                                Klik 1x: <strong class="legend-inc">Include (Hijau)</strong> &bull;
+                                Klik 2x: <strong class="legend-exc">Exclude (Merah)</strong> &bull;
+                                Klik 3x: <strong class="legend-neu">Netral (Abu-abu)</strong>
+                            </span>
+                        </div>
+
+                        {% for group_name, tags in tag_groups.items() %}
+                        <div class="tag-group-block">
+                            <div class="tag-group-title">{{ group_name }}</div>
+                            {% if tags %}
+                                <div class="tag-pills-grid">
+                                    {% for tag in tags %}
+                                        {% set state = 'include' if tag['key'] in include_tags else ('exclude' if tag['key'] in exclude_tags else 'neutral') %}
+                                        <button
+                                            type="button"
+                                            class="tri-tag-pill state-{{ state }}"
+                                            data-key="{{ tag['key'] }}"
+                                            data-label="{{ tag['label']|lower }}"
+                                            data-state="{{ state }}"
+                                            onclick="cycleTagState(this)"
+                                        >
+                                            {{ tag['label'] }}
+                                        </button>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <p class="tag-empty-text">Belum ada data di kamus database.</p>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </form>
+            </div>
+
+            <!-- RAK BUKU PER JENIS TANAMAN -->
+            {% if not grouped_plants %}
+                <div class="bookshelf-wrapper">
+                    <div class="shelf-label">Arsip Inventaris</div>
+                    <div class="bookshelf empty-shelf">
+                        <div class="empty-library-notice">
+                            {% if search_query or include_tags or exclude_tags %}
+                                <h3>Tidak Ada Tanaman yang Cocok</h3>
+                                <p>Tidak ditemukan catatan tanaman untuk kombinasi nama atau filter tag yang dipilih.</p>
+                            {% else %}
+                                <h3>Rak Perpustakaan Masih Kosong</h3>
+                                <p>Database SQLite telah siap. Belum ada entri tanaman yang tercatat di dalam sistem.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                {% for jenis_tanaman, daftar_tanaman in grouped_plants.items() %}
+                <div class="bookshelf-wrapper">
+                    <div class="shelf-label">{{ jenis_tanaman }}</div>
+                    <div class="bookshelf">
+                        <div class="books">
+                            {% for tanaman in daftar_tanaman %}
+                            <a href="{{ url_for('plants.detail', uid=tanaman['uid']) }}" class="book" onclick="bukaBukuAnimasi(event, this)">
+
+                                <!-- Efek cahaya grimoire -->
+                                <div class="magic-glow"></div>
+
+                                <div class="book-cover-full">
+                                    {% if tanaman['photo_filename'] %}
+                                        <img src="{{ url_for('static', filename='images/' ~ tanaman['photo_filename']) }}" alt="{{ tanaman['name'] }}">
+                                    {% else %}
+                                        <img src="[https://via.placeholder.com/90x90/388e3c/fff?text=](https://via.placeholder.com/90x90/388e3c/fff?text=){{ tanaman['name'] | urlencode }}" alt="{{ tanaman['name'] }}">
+                                    {% endif %}
+
+                                    <h4>{{ tanaman['name'] }}</h4>
+                                    <p class="latin-name">{{ tanaman['sector_name'] }} - {{ tanaman['subsector_name'] }}</p>
+                                    <p class="lang-info" style="margin-top: 10px; background-color: {% if tanaman['status'] == 'Hidup' %}#c8e6c9{% else %}#ffcdd2{% endif %}; color: #333;">
+                                        Status: {{ tanaman['status'] }}
+                                    </p>
+                                </div>
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% endif %}
 
         </div>
     </div>
@@ -49,35 +169,83 @@
     <script>
         function bukaPintu() {
             const treeScene = document.getElementById('tree-scene');
+            if (!treeScene) return;
             treeScene.classList.add('zoom-in-hidden');
             setTimeout(() => { treeScene.style.display = 'none'; }, 1200);
         }
 
+        function toggleTagsDropdown() {
+            const panel = document.getElementById('tagsDropdownPanel');
+            panel.classList.toggle('open');
+        }
+
+        // 3-State Tag Cycle: neutral (gray) -> include (green) -> exclude (red) -> neutral (gray)
+        function cycleTagState(btn) {
+            const current = btn.dataset.state;
+            let next = 'neutral';
+            if (current === 'neutral') {
+                next = 'include';
+            } else if (current === 'include') {
+                next = 'exclude';
+            } else {
+                next = 'neutral';
+            }
+
+            btn.dataset.state = next;
+            btn.classList.remove('state-neutral', 'state-include', 'state-exclude');
+            btn.classList.add(`state-${next}`);
+
+            syncHiddenTagInputs();
+        }
+
+        function syncHiddenTagInputs() {
+            const container = document.getElementById('hiddenTagInputs');
+            container.innerHTML = '';
+
+            document.querySelectorAll('.tri-tag-pill').forEach(btn => {
+                const state = btn.dataset.state;
+                const key = btn.dataset.key;
+                if (state === 'include' || state === 'exclude') {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = state === 'include' ? 'inc' : 'exc';
+                    input.value = key;
+                    container.appendChild(input);
+                }
+            });
+        }
+
+        function filterTagPills(keyword) {
+            const q = keyword.trim().toLowerCase();
+            document.querySelectorAll('.tri-tag-pill').forEach(btn => {
+                const label = btn.dataset.label || '';
+                btn.style.display = label.includes(q) ? 'inline-flex' : 'none';
+            });
+        }
+
         function bukaBukuAnimasi(event, element) {
-            event.preventDefault(); 
+            event.preventDefault();
             const url = element.getAttribute('href');
             const transitionScreen = document.getElementById('page-transition');
 
-            // Mengunci hover buku lain
             document.body.classList.add('animasi-berjalan');
 
-            // Kalkulasi posisi tengah layar
             const rect = element.getBoundingClientRect();
             const bookCenterX = rect.left + (rect.width / 2);
             const bookCenterY = rect.top + (rect.height / 2);
-            
+
             const screenCenterX = window.innerWidth / 2;
             const screenCenterY = window.innerHeight / 2;
-            
+
             const kompensasiRusuk = 90;
             const moveX = screenCenterX - bookCenterX + kompensasiRusuk;
             const moveY = screenCenterY - bookCenterY;
-            
+
             element.style.setProperty('--to-center-x', `${moveX}px`);
             element.style.setProperty('--to-center-y', `${moveY}px`);
 
             element.classList.add('is-opening');
-            
+
             setTimeout(() => { transitionScreen.classList.add('fade-out-active'); }, 2600);
             setTimeout(() => { window.location.href = url; }, 3000);
         }

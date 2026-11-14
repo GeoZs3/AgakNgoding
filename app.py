@@ -1,39 +1,38 @@
 from flask import Flask, render_template
-import sqlite3
+from config import Config
+from database.connection import close_db, get_db, init_db
+from routes.auth import auth_bp
+from routes.main import main_bp
+from routes.plants import plants_bp
+from services.auth_service import load_logged_in_user
 
-app = Flask(__name__)
 
-def get_db_connection():
-    conn = sqlite3.connect('database_tanaman.db')
-    conn.row_factory = sqlite3.Row 
-    return conn
+def create_app(config_class=Config) -> Flask:
+    app = Flask(__name__, instance_relative_config=True)
+    app.config.from_object(config_class)
 
-@app.route('/')
-def index():
-    conn = get_db_connection()
-    semua_buku = conn.execute('SELECT * FROM tanaman').fetchall()
-    conn.close()
-    
-    # Mengelompokkan buku berdasarkan jenis_tanaman
-    kategori_buku = {}
-    for buku in semua_buku:
-        kategori = buku['jenis_tanaman']
-        if kategori not in kategori_buku:
-            kategori_buku[kategori] = []
-        kategori_buku[kategori].append(buku)
-    
-    return render_template('index.html', kategori_buku=kategori_buku)
+    # Inisialisasi otomatis file SQLite dan seluruh tabel jika belum ada
+    init_db(app)
 
-@app.route('/buku/<int:buku_id>')
-def baca_buku(buku_id):
-    conn = get_db_connection()
-    buku = conn.execute('SELECT * FROM tanaman WHERE id = ?', (buku_id,)).fetchone()
-    conn.close()
-    
-    if buku is None:
-        return "Buku tanaman tidak ditemukan", 404
-        
-    return render_template('detail.html', buku=buku)
+    @app.before_request
+    def before_request():
+        db = get_db()
+        load_logged_in_user(db)
 
-if __name__ == '__main__':
+    app.teardown_appcontext(close_db)
+
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(main_bp)
+    app.register_blueprint(plants_bp)
+
+    @app.errorhandler(404)
+    def page_not_found(error):
+        return render_template("404.html"), 404
+
+    return app
+
+
+app = create_app()
+
+if __name__ == "__main__":
     app.run(debug=True)

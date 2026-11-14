@@ -3,33 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detail Tanaman</title>
+    <title>{{ plant['name'] }} - Detail Tanaman</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
     <div class="parchment-container">
         <div class="parchment-paper">
-            
+
             <div class="parchment-header">
                 <div class="parchment-title-area">
-                    <h1>{{ buku['nama_tanaman'] }}</h1>
-                    <p>No. Registrasi: {{ buku['id'] }}</p>
+                    <h1>{{ plant['name'] }}</h1>
+                    {% if plant['scientific_name'] %}
+                        <p class="parchment-scientific"><em>{{ plant['scientific_name'] }}</em></p>
+                    {% endif %}
+                    <p><strong>ID Tanaman:</strong> <code>{{ plant['plant_code'] }}</code></p>
                 </div>
-                <img src="https://via.placeholder.com/240x180/388e3c/fff?text={{ buku['nama_tanaman'] }}" alt="Ilustrasi" class="parchment-image">
+
+                {% if plant['photo_filename'] %}
+                    <img src="{{ url_for('static', filename='images/' ~ plant['photo_filename']) }}" alt="Ilustrasi {{ plant['name'] }}" class="parchment-image">
+                {% else %}
+                    <img src="[https://via.placeholder.com/240x180/388e3c/fff?text=](https://via.placeholder.com/240x180/388e3c/fff?text=){{ plant['name'] | urlencode }}" alt="Ilustrasi {{ plant['name'] }}" class="parchment-image">
+                {% endif %}
             </div>
 
             <div class="parchment-content">
-                <p><strong>Lokasi Penanaman:</strong> {{ buku['lokasi'] }}</p>
-                <p><strong>Total Jumlah:</strong> {{ buku['jumlah'] }} buah</p>
-                <p><strong>Kondisi Saat Ini:</strong> {{ buku['status'] }}</p>
-                
-                {% if buku['qr'] %}
-                <p><strong>Kode QR:</strong> {{ buku['qr'] }}</p>
+                <p><strong>Jenis Tanaman:</strong> {{ plant['plant_type_name'] }} ({{ plant['plant_type_code'] }})</p>
+                <p><strong>Lokasi Penanaman:</strong> {{ plant['sector_name'] }} &mdash; {{ plant['subsector_name'] }}</p>
+                <p><strong>Penanggung Jawab Wilayah:</strong> {{ plant['manager_code'] }} ({{ plant['manager_name'] }})</p>
+                <p><strong>Total Jumlah:</strong> {{ plant['quantity'] }} spesimen</p>
+                <p><strong>Kondisi Saat Ini:</strong> {{ plant['status'] }}</p>
+
+                <div class="parchment-section">
+                    <h3>Taksonomi Biologis</h3>
+                    <ul class="taxonomy-list">
+                        <li><strong>Famili:</strong> {{ plant['family'] or 'Belum diketahui' }}</li>
+                        <li><strong>Genus:</strong> <em>{{ plant['genus'] or 'Belum diketahui' }}</em></li>
+                        <li><strong>Spesies:</strong> <em>{{ plant['species'] or 'Belum diketahui' }}</em></li>
+                        <li><strong>Nama Ilmiah:</strong> <em>{{ plant['scientific_name'] or 'Belum diketahui' }}</em></li>
+                    </ul>
+                </div>
+
+                {% if plant['notes'] %}
+                <div class="parchment-section">
+                    <h3>Catatan Tambahan</h3>
+                    <p>{{ plant['notes'] }}</p>
+                </div>
                 {% endif %}
-                
+
                 <br>
-                <a href="{{ url_for('index') }}" class="btn-back">&#8592; Kembali ke Pohon</a>
+                <a href="{{ url_for('main.index', masuk=1) }}" class="btn-back">&#8592; Kembali ke Pohon</a>
             </div>
 
         </div>

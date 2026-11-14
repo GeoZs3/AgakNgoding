@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tambah Data Tanaman - Proyek Adiwiyata</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <div class="parchment-container">
+        <div class="parchment-paper form-parchment">
+            <div class="parchment-header">
+                <div class="parchment-title-area">
+                    <h1>Catat Tanaman Baru</h1>
+                    {% if g.user %}
+                        <p>Petugas Login: <strong>{{ g.user['full_name'] }} ({{ g.user['manager_code'] or 'Guru' }})</strong></p>
+                    {% endif %}
+                </div>
+                <a href="{{ url_for('main.index', masuk=1) }}" class="btn-back" style="margin-top: 0;">&#8592; Batal &amp; Kembali</a>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="flash-alert flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- PRATINJAU REAL-TIME ID PUBLIK: SEKTOR-SUB-IDSUBSEKTOR-TIPETANAMAN-P -->
+            <div class="id-preview-box">
+                <span class="id-preview-label">Pratinjau ID Tanaman:</span>
+                <code id="publicIdPreview">SEKTOR-SUB-001-TIPE-P</code>
+            </div>
+
+            <form method="POST" action="{{ url_for('plants.add_plant') }}" enctype="multipart/form-data" class="adiwiyata-form">
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label for="plantNameInput">Nama Tanaman *</label>
+                        <input
+                            type="text"
+                            id="plantNameInput"
+                            name="name"
+                            list="knownPlantsList"
+                            required
+                            placeholder="Ketik nama tanaman..."
+                            oninput="handlePlantNameAutofill()"
+                        >
+                        <datalist id="knownPlantsList">
+                            {% for kp in metadata['known_plants'] %}
+                                <option value="{{ kp['name'] }}"></option>
+                            {% endfor %}
+                        </datalist>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="plantTypeSelect">Jenis Tanaman (Fungsional) *</label>
+                        <select id="plantTypeSelect" name="plant_type_id" required onchange="updatePublicIdPreview()">
+                            <option value="">-- Pilih Jenis Tanaman --</option>
+                            {% for pt in metadata['plant_types'] %}
+                                <option value="{{ pt['id'] }}" data-code="{{ pt['code'] }}">{{ pt['name'] }} ({{ pt['code'] }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="quantityInput">Jumlah Spesimen *</label>
+                        <input type="number" id="quantityInput" name="quantity" value="1" min="0" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="statusSelect">Status Kondisi *</label>
+                        <select id="statusSelect" name="status" required>
+                            <option value="Hidup">Hidup</option>
+                            <option value="Perawatan Khusus">Perawatan Khusus</option>
+                            <option value="Layu">Layu</option>
+                            <option value="Mati">Mati</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- BAGIAN LOKASI (SEKTOR -> SUBSEKTOR -> P OTOMATIS) -->
+                <fieldset class="form-fieldset">
+                    <legend>Lokasi Penanaman &amp; Penanggung Jawab (P)</legend>
+                    <div class="form-grid-3">
+                        <div class="form-group">
+                            <label for="sectorSelect">Sektor Sekolah *</label>
+                            <select id="sectorSelect" required onchange="handleSectorChange()">
+                                <option value="">-- Pilih Sektor --</option>
+                                {% for s in metadata['sectors'] %}
+                                    <option value="{{ s['id'] }}" data-code="{{ s['code'] }}">
+                                        {{ s['code'] }} - {{ s['name'] }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="subsectorSelect">Subsektor Spesifik *</label>
+                            <select id="subsectorSelect" name="subsector_id" required onchange="updatePublicIdPreview()">
+                                <option value="">-- Pilih Sektor Dahulu --</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="managerSelect">Penanggung Jawab (P) *</label>
+                            <select id="managerSelect" name="manager_code" required onchange="updatePublicIdPreview()">
+                                <option value="">-- Pilih P --</option>
+                                {% for pm in metadata['plant_managers'] %}
+                                    <option value="{{ pm['code'] }}" data-code="{{ pm['code'] }}">
+                                        {{ pm['code'] }} - {{ pm['name'] }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <!-- BAGIAN TAKSONOMI BIOLOGIS (CASCADING & AUTOFILL) -->
+                <fieldset class="form-fieldset">
+                    <legend>Taksonomi Biologis (Otomatis Menyaring &amp; Mengisi)</legend>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="familyInput">Famili</label>
+                            <input
+                                type="text"
+                                id="familyInput"
+                                name="family"
+                                list="familyList"
+                                placeholder="Pilih atau ketik famili..."
+                                oninput="handleFamilyChange()"
+                            >
+                            <datalist id="familyList"></datalist>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="genusInput">Genus</label>
+                            <input
+                                type="text"
+                                id="genusInput"
+                                name="genus"
+                                list="genusList"
+                                placeholder="Tersaring otomatis sesuai famili..."
+                                oninput="handleGenusChange()"
+                            >
+                            <datalist id="genusList"></datalist>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="speciesInput">Spesies</label>
+                            <input type="text" id="speciesInput" name="species" placeholder="Contoh: Dracaena trifasciata">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="scientificInput">Nama Ilmiah Lengkap</label>
+                            <input type="text" id="scientificInput" name="scientific_name" placeholder="Contoh: Dracaena trifasciata">
+                        </div>
+                    </div>
+                </fieldset>
+
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label for="photoInput">Foto Tanaman (Opsional)</label>
+                        <input type="file" id="photoInput" name="photo" accept=".png,.jpg,.jpeg,.webp">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="notesInput">Catatan Tambahan (Opsional)</label>
+                        <input type="text" id="notesInput" name="notes" placeholder="Keterangan kondisi media tanam / perawatan...">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-submit-parchment">Simpan ke Arsip Perpustakaan</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const METADATA = {{ metadata | tojson }};
+
+        // 1. Inisialisasi Datalist Famili & Genus
+        function populateTaxonomyLists(selectedFamily = '') {
+            const familyList = document.getElementById('familyList');
+            const genusList = document.getElementById('genusList');
+            const famFilter = selectedFamily.trim().toLowerCase();
+
+            const families = [...new Set(
+                METADATA.taxonomies.map(t => t.family).filter(Boolean)
+            )];
+            familyList.innerHTML = families.map(f => `<option value="${f}"></option>`).join('');
+
+            // Saring kandidat Genus hanya yang berada dalam Famili terpilih
+            const genera = [...new Set(
+                METADATA.taxonomies
+                    .filter(t => !famFilter || (t.family && t.family.toLowerCase() === famFilter))
+                    .map(t => t.genus)
+                    .filter(Boolean)
+            )];
+            genusList.innerHTML = genera.map(g => `<option value="${g}"></option>`).join('');
+        }
+
+        function handleFamilyChange() {
+            const familyVal = document.getElementById('familyInput').value.trim();
+            populateTaxonomyLists(familyVal);
+
+            // Jika genus saat ini tidak cocok dengan famili baru, bersihkan kandidat genus
+            const genusInput = document.getElementById('genusInput');
+            const currentGenus = genusInput.value.trim().toLowerCase();
+            if (familyVal && currentGenus) {
+                const validMatch = METADATA.taxonomies.some(
+                    t => t.family && t.family.toLowerCase() === familyVal.toLowerCase() &&
+                         t.genus && t.genus.toLowerCase() === currentGenus
+                );
+                if (!validMatch) {
+                    genusInput.value = '';
+                }
+            }
+        }
+
+        function handleGenusChange() {
+            const genusVal = document.getElementById('genusInput').value.trim().toLowerCase();
+            if (!genusVal) return;
+
+            const matches = METADATA.taxonomies.filter(
+                t => t.genus && t.genus.toLowerCase() === genusVal
+            );
+            if (matches.length > 0) {
+                if (matches[0].family) {
+                    document.getElementById('familyInput').value = matches[0].family;
+                }
+                if (matches.length === 1) {
+                    if (matches[0].species) document.getElementById('speciesInput').value = matches[0].species;
+                    if (matches[0].scientific_name) document.getElementById('scientificInput').value = matches[0].scientific_name;
+                }
+            }
+        }
+
+        function handlePlantNameAutofill() {
+            const nameVal = document.getElementById('plantNameInput').value.trim().toLowerCase();
+            if (!nameVal) return;
+
+            const match = METADATA.known_plants.find(
+                p => p.name && p.name.toLowerCase() === nameVal
+            );
+            if (match) {
+                if (match.plant_type_id) {
+                    document.getElementById('plantTypeSelect').value = match.plant_type_id;
+                }
+                if (match.family) document.getElementById('familyInput').value = match.family;
+                if (match.genus) document.getElementById('genusInput').value = match.genus;
+                if (match.species) document.getElementById('speciesInput').value = match.species;
+                if (match.scientific_name) document.getElementById('scientificInput').value = match.scientific_name;
+                populateTaxonomyLists(match.family || '');
+                updatePublicIdPreview();
+            }
+        }
+
+        // 2. Cascading Lokasi: Sektor -> Subsektor -> P Otomatis (via sector_managers)
+        function handleSectorChange() {
+            const sectorSelect = document.getElementById('sectorSelect');
+            const subsectorSelect = document.getElementById('subsectorSelect');
+            const managerSelect = document.getElementById('managerSelect');
+
+            const sectorId = parseInt(sectorSelect.value, 10);
+            subsectorSelect.innerHTML = '<option value="">-- Pilih Subsektor --</option>';
+
+            if (!isNaN(sectorId)) {
+                const filteredSubs = METADATA.subsectors.filter(sub => sub.sector_id === sectorId);
+                filteredSubs.forEach(sub => {
+                    const opt = document.createElement('option');
+                    opt.value = sub.id;
+                    opt.dataset.code = sub.code;
+                    opt.dataset.nextSeq = sub.next_seq;
+                    opt.textContent = `${sub.code} - ${sub.name}`;
+                    subsectorSelect.appendChild(opt);
+                });
+
+                // Otomatis pilih P yang dipetakan di tabel sector_managers untuk Sektor ini
+                const assignedManagers = METADATA.sector_managers.filter(sm => sm.sector_id === sectorId);
+                if (assignedManagers.length > 0) {
+                    managerSelect.value = assignedManagers[0].manager_code;
+                }
+            }
+
+            updatePublicIdPreview();
+        }
+
+        // 3. Pratinjau Real-time Format ID: SEKTOR-SUB-IDSUBSEKTOR-TIPETANAMAN-P
+        function updatePublicIdPreview() {
+            const sectorSel = document.getElementById('sectorSelect');
+            const subSel = document.getElementById('subsectorSelect');
+            const typeSel = document.getElementById('plantTypeSelect');
+            const mgrSel = document.getElementById('managerSelect');
+
+            const secCode = sectorSel.selectedOptions[0]?.dataset?.code || 'SEKTOR';
+            const subCode = subSel.selectedOptions[0]?.dataset?.code || 'SUB';
+            const nextSeqRaw = parseInt(subSel.selectedOptions[0]?.dataset?.nextSeq || '1', 10);
+            const seqFormatted = String(nextSeqRaw).padStart(3, '0');
+            const typeCode = typeSel.selectedOptions[0]?.dataset?.code || 'TIPE';
+            const mgrCode = mgrSel.selectedOptions[0]?.dataset?.code || 'P';
+
+            document.getElementById('publicIdPreview').textContent =
+                `${secCode}-${subCode}-${seqFormatted}-${typeCode}-${mgrCode}`;
+        }
+
+        populateTaxonomyLists();
+    </script>
+</body>
+</html>
