@@ -1,3 +1,4 @@
+import re
 import uuid
 import sqlite3
 from collections import defaultdict
@@ -7,6 +8,91 @@ from typing import Any, Dict, List, Optional
 def generate_plant_uid() -> str:
     """Menghasilkan UID permanen berbasis UUIDv4 untuk identitas internal backend."""
     return str(uuid.uuid4())
+
+
+def _generate_short_code(label: str, max_len: int = 5) -> str:
+    """Membuat singkatan kode otomatis dari nama jika pengguna tidak mengisi kode manual."""
+    words = re.findall(r"[A-Za-z0-9]+", label.upper())
+    if not words:
+        return "NEW"
+    if len(words) == 1:
+        return words[0][:max_len]
+    initials = "".join(w[0] for w in words[:max_len])
+    return initials if len(initials) >= 2 else words[0][:max_len]
+
+
+def get_or_create_sector(db: sqlite3.Connection, sector_name: str, sector_code: str = "") -> int:
+    """Mencari sektor berdasarkan nama (case-insensitive); jika belum ada, buat entri baru."""
+    clean_name = sector_name.strip()
+    existing = db.execute(
+        "SELECT id FROM sectors WHERE LOWER(name) = LOWER(?)", (clean_name,)
+    ).fetchone()
+    if existing:
+        return int(existing["id"])
+
+    base_code = sector_code.strip().upper() or _generate_short_code(clean_name, 4)
+    final_code = base_code
+    counter = 1
+    while db.execute("SELECT 1 FROM sectors WHERE code = ?", (final_code,)).fetchone():
+        counter += 1
+        final_code = f"{base_code}{counter}"
+
+    cur = db.execute(
+        "INSERT INTO sectors (code, name) VALUES (?, ?)", (final_code, clean_name)
+    )
+    return int(cur.lastrowid)
+
+
+def get_or_create_subsector(
+    db: sqlite3.Connection, sector_id: int, subsector_name: str, subsector_code: str = ""
+) -> int:
+    """Mencari subsektor dalam sektor terkait; jika belum ada, buat entri baru."""
+    clean_name = subsector_name.strip()
+    existing = db.execute(
+        "SELECT id FROM subsectors WHERE sector_id = ? AND LOWER(name) = LOWER(?)",
+        (sector_id, clean_name),
+    ).fetchone()
+    if existing:
+        return int(existing["id"])
+
+    base_code = subsector_code.strip().upper() or _generate_short_code(clean_name, 5)
+    final_code = base_code
+    counter = 1
+    while db.execute(
+        "SELECT 1 FROM subsectors WHERE sector_id = ? AND code = ?", (sector_id, final_code)
+    ).fetchone():
+        counter += 1
+        final_code = f"{base_code}{counter}"
+
+    cur = db.execute(
+        "INSERT INTO subsectors (sector_id, code, name) VALUES (?, ?, ?)",
+        (sector_id, final_code, clean_name),
+    )
+    return int(cur.lastrowid)
+
+
+def get_or_create_plant_type(
+    db: sqlite3.Connection, type_name: str, type_code: str = ""
+) -> int:
+    """Mencari jenis tanaman berdasarkan nama; jika belum ada, buat entri baru."""
+    clean_name = type_name.strip()
+    existing = db.execute(
+        "SELECT id FROM plant_types WHERE LOWER(name) = LOWER(?)", (clean_name,)
+    ).fetchone()
+    if existing:
+        return int(existing["id"])
+
+    base_code = type_code.strip().upper() or _generate_short_code(clean_name, 5)
+    final_code = base_code
+    counter = 1
+    while db.execute("SELECT 1 FROM plant_types WHERE code = ?", (final_code,)).fetchone():
+        counter += 1
+        final_code = f"{base_code}{counter}"
+
+    cur = db.execute(
+        "INSERT INTO plant_types (code, name) VALUES (?, ?)", (final_code, clean_name)
+    )
+    return int(cur.lastrowid)
 
 
 def get_next_subsector_sequence(db: sqlite3.Connection, subsector_id: int) -> int:
@@ -56,8 +142,8 @@ def get_filter_tag_groups(db: sqlite3.Connection) -> Dict[str, List[Dict[str, st
         "Taksonomi (Genus)": [],
     }
 
-    # 1. Status Hidup (selalu sediakan opsi dasar + status yang ada di DB)
-    status_set = {"Hidup", "Layu", "Mati"}
+    # 1. Status Hidup
+    status_set = {"Hidup", "Perawatan Khusus", "Layu", "Mati"}
     for r in db.execute("SELECT DISTINCT status FROM plants WHERE status IS NOT NULL AND status != ''"):
         status_set.add(r["status"])
     for st in sorted(status_set):
@@ -152,8 +238,6 @@ def get_plants_grouped_by_type(
         like_val = f"%{search_query}%"
         params.extend([like_val, like_val, like_val])
 
-    # Kelompokkan include tags berdasarkan kategori:
-    # Antar-kategori menggunakan AND, di dalam kategori yang sama menggunakan OR
     inc_by_cat: Dict[str, List[str]] = defaultdict(list)
     for t in include_tags:
         if ":" in t:
@@ -169,7 +253,6 @@ def get_plants_grouped_by_type(
         if or_clauses:
             conditions.append(f"({' OR '.join(or_clauses)})")
 
-    # Exclude tags: setiap tag merah harus dikecualikan (AND NOT)
     for k in exclude_tags:
         clause = _build_tag_condition(k, is_include=False, params=params)
         if clause:
@@ -250,7 +333,7 @@ def get_plant_by_uid(db: sqlite3.Connection, uid: str) -> Optional[Dict[str, Any
 def get_form_cascading_metadata(db: sqlite3.Connection) -> Dict[str, Any]:
     """
     Mengambil seluruh dictionary lokasi, P pengurus tanaman, jenis tanaman,
-    dan kamus taksonomi untuk mendukung cascading filter & autofill di frontend.
+    dan kamus taksonomi untuk mendukung searchable combobox & autofill di frontend.
     """
     sectors = [
         dict(r) for r in db.execute("SELECT id, code, name FROM sectors ORDER BY name ASC")
@@ -354,7 +437,6 @@ def create_plant_entry(
     menghitung nomor urut subsektor, dan membentuk ID publik SEKTOR-SUB-IDSUBSEKTOR-TIPETANAMAN-P.
     """
     with db:
-        # 1. Validasi & ambil kode sektor, subsektor, jenis tanaman, dan P
         loc_row = db.execute(
             """
             SELECT s.id AS sector_id, s.code AS sector_code, sub.code AS subsector_code
@@ -380,7 +462,6 @@ def create_plant_entry(
         if not mgr_row:
             raise ValueError("Kode penanggung jawab (P) tidak valid atau bukan pengurus tanaman.")
 
-        # 2. Kelola taksonomi biologis (jika diisi)
         taxonomy_id: Optional[int] = None
         family = (taxonomy_data.get("family") or "").strip() or None
         genus = (taxonomy_data.get("genus") or "").strip() or None
@@ -424,7 +505,6 @@ def create_plant_entry(
                 )
                 taxonomy_id = cur_tx.lastrowid
 
-        # 3. Generate UID internal & ID publik terstruktur
         uid = generate_plant_uid()
         subsector_seq = get_next_subsector_sequence(db, subsector_id)
         plant_code = build_public_plant_id(
@@ -435,7 +515,6 @@ def create_plant_entry(
             manager_code=mgr_row["code"],
         )
 
-        # 4. Simpan ke tabel plants
         db.execute(
             """
             INSERT INTO plants (
@@ -463,3 +542,106 @@ def create_plant_entry(
         )
 
     return {"uid": uid, "plant_code": plant_code}
+
+def update_plant_entry(
+    db: sqlite3.Connection,
+    uid: str,
+    status: str,
+    plant_type_id: int,
+    subsector_id: int,
+    notes: Optional[str] = None,
+) -> None:
+    """
+    Memperbarui status tanaman, jenis tanaman, lokasi (subsektor), dan catatan.
+    Jika subsektor atau jenis tanaman berubah, plant_code ikut diperbarui otomatis.
+    """
+    with db:
+        current = db.execute(
+            """
+            SELECT p.subsector_id, p.subsector_seq, p.plant_type_id, p.manager_code
+            FROM plants p
+            WHERE p.uid = ?
+            """,
+            (uid,),
+        ).fetchone()
+        if not current:
+            raise ValueError("Data tanaman tidak ditemukan.")
+
+        type_row = db.execute(
+            "SELECT code FROM plant_types WHERE id = ?",
+            (plant_type_id,),
+        ).fetchone()
+        if not type_row:
+            raise ValueError("Jenis tanaman baru tidak valid.")
+
+        loc_row = db.execute(
+            """
+            SELECT s.code AS sector_code, sub.code AS subsector_code
+            FROM subsectors sub
+            INNER JOIN sectors s ON sub.sector_id = s.id
+            WHERE sub.id = ?
+            """,
+            (subsector_id,),
+        ).fetchone()
+        if not loc_row:
+            raise ValueError("Subsektor baru tidak valid.")
+
+        subsector_changed = int(current["subsector_id"]) != int(subsector_id)
+        type_changed = int(current["plant_type_id"]) != int(plant_type_id)
+
+        if subsector_changed or type_changed:
+            new_seq = (
+                get_next_subsector_sequence(db, subsector_id)
+                if subsector_changed
+                else int(current["subsector_seq"])
+            )
+            new_plant_code = build_public_plant_id(
+                sector_code=loc_row["sector_code"],
+                subsector_code=loc_row["subsector_code"],
+                subsector_seq=new_seq,
+                plant_type_code=type_row["code"],
+                manager_code=current["manager_code"],
+            )
+            db.execute(
+                """
+                UPDATE plants
+                SET status = ?,
+                    plant_type_id = ?,
+                    subsector_id = ?,
+                    subsector_seq = ?,
+                    plant_code = ?,
+                    notes = ?,
+                    updated_at = datetime('now', 'localtime')
+                WHERE uid = ?
+                """,
+                (
+                    status.strip(),
+                    plant_type_id,
+                    subsector_id,
+                    new_seq,
+                    new_plant_code,
+                    (notes or "").strip() or None,
+                    uid,
+                ),
+            )
+        else:
+            db.execute(
+                """
+                UPDATE plants
+                SET status = ?,
+                    notes = ?,
+                    updated_at = datetime('now', 'localtime')
+                WHERE uid = ?
+                """,
+                (status.strip(), (notes or "").strip() or None, uid),
+            )
+
+
+def delete_plant_entry(db: sqlite3.Connection, uid: str) -> Optional[str]:
+    """Menghapus entri tanaman dari database dan mengembalikan nama file fotonya untuk dihapus."""
+    with db:
+        row = db.execute("SELECT photo_filename FROM plants WHERE uid = ?", (uid,)).fetchone()
+        if not row:
+            return None
+        db.execute("DELETE FROM plants WHERE uid = ?", (uid,))
+        return row["photo_filename"]

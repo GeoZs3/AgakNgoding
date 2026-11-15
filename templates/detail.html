@@ -11,6 +11,14 @@
     <div class="parchment-container">
         <div class="parchment-paper">
 
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="flash-alert flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
             <div class="parchment-header">
                 <div class="parchment-title-area">
                     <h1>{{ plant['name'] }}</h1>
@@ -23,7 +31,7 @@
                 {% if plant['photo_filename'] %}
                     <img src="{{ url_for('static', filename='images/' ~ plant['photo_filename']) }}" alt="Ilustrasi {{ plant['name'] }}" class="parchment-image">
                 {% else %}
-                    <img src="[https://via.placeholder.com/240x180/388e3c/fff?text=](https://via.placeholder.com/240x180/388e3c/fff?text=){{ plant['name'] | urlencode }}" alt="Ilustrasi {{ plant['name'] }}" class="parchment-image">
+                    <img src="https://via.placeholder.com/240x180/388e3c/fff?text={{ plant['name'] | urlencode }}" alt="Ilustrasi {{ plant['name'] }}" class="parchment-image">
                 {% endif %}
             </div>
 
@@ -31,32 +39,184 @@
                 <p><strong>Jenis Tanaman:</strong> {{ plant['plant_type_name'] }} ({{ plant['plant_type_code'] }})</p>
                 <p><strong>Lokasi Penanaman:</strong> {{ plant['sector_name'] }} &mdash; {{ plant['subsector_name'] }}</p>
                 <p><strong>Penanggung Jawab Wilayah:</strong> {{ plant['manager_code'] }} ({{ plant['manager_name'] }})</p>
-                <p><strong>Total Jumlah:</strong> {{ plant['quantity'] }} spesimen</p>
                 <p><strong>Kondisi Saat Ini:</strong> {{ plant['status'] }}</p>
 
                 <div class="parchment-section">
                     <h3>Taksonomi Biologis</h3>
-                    <ul class="taxonomy-list">
-                        <li><strong>Famili:</strong> {{ plant['family'] or 'Belum diketahui' }}</li>
-                        <li><strong>Genus:</strong> <em>{{ plant['genus'] or 'Belum diketahui' }}</em></li>
-                        <li><strong>Spesies:</strong> <em>{{ plant['species'] or 'Belum diketahui' }}</em></li>
-                        <li><strong>Nama Ilmiah:</strong> <em>{{ plant['scientific_name'] or 'Belum diketahui' }}</em></li>
-                    </ul>
+                    {% if plant['family'] or plant['genus'] or plant['species'] or plant['scientific_name'] %}
+                        <ul class="taxonomy-list">
+                            <li><strong>Famili:</strong> {{ plant['family'] or 'Belum diketahui' }}</li>
+                            <li><strong>Genus:</strong> <em>{{ plant['genus'] or 'Belum diketahui' }}</em></li>
+                            <li><strong>Spesies:</strong> <em>{{ plant['species'] or 'Belum diketahui' }}</em></li>
+                            <li><strong>Nama Ilmiah:</strong> <em>{{ plant['scientific_name'] or 'Belum diketahui' }}</em></li>
+                        </ul>
+                    {% else %}
+                        <p style="font-style: italic; color: #6d4c41;">
+                            Sedang diproses otomatis oleh AI di balik layar. Muat ulang halaman beberapa saat lagi untuk melihat hasilnya.
+                        </p>
+                    {% endif %}
                 </div>
 
-                {% if plant['notes'] %}
                 <div class="parchment-section">
-                    <h3>Catatan Tambahan</h3>
-                    <p>{{ plant['notes'] }}</p>
+                    <h3>Catatan Tanaman</h3>
+                    <p>{{ plant['notes'] or 'Tidak ada catatan khusus.' }}</p>
                 </div>
-                {% endif %}
 
-                <br>
-                <a href="{{ url_for('main.index', masuk=1) }}" class="btn-back">&#8592; Kembali ke Pohon</a>
+                <!-- NAVIGASI BAWAH & KONTROL OTORISASI -->
+                <div class="detail-footer-actions">
+                    <a href="{{ url_for('main.index', masuk=1) }}" class="btn-back" style="margin-top: 0;">&#8592; Kembali ke Pohon</a>
+
+                    <div class="qr-footer-controls">
+                        <button type="button" class="btn-qr-small" onclick="openQrModal()">
+                            Lihat &amp; Unduh QR
+                        </button>
+
+                        {% if g.user %}
+                            <button type="button" class="btn-qr-small btn-edit-entry" onclick="openEditModal()">
+                                Edit Data
+                            </button>
+
+                            <form
+                                method="POST"
+                                action="{{ url_for('plants.delete_plant', uid=plant['uid']) }}"
+                                style="display: inline;"
+                                onsubmit="return confirm('Yakin ingin menghapus permanen entri tanaman {{ plant['name'] }} ({{ plant['plant_code'] }})?');"
+                            >
+                                <button type="submit" class="btn-qr-small btn-delete-entry">
+                                    Hapus Entri
+                                </button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
 
         </div>
     </div>
 
+    <!-- POPUP MODAL DYNAMIC QR CODE -->
+    <div class="qr-modal-backdrop {% if show_qr_modal %}open{% endif %}" id="qrModalBackdrop" onclick="closeModalOnBackdrop(event, 'qrModalBackdrop')">
+        <div class="qr-modal-card">
+            <button type="button" class="qr-modal-close" onclick="closeQrModal()" aria-label="Tutup">&times;</button>
+            <h3>Kode QR Identitas Tanaman</h3>
+            <p class="qr-modal-code"><code>{{ plant['plant_code'] }}</code></p>
+
+            <div class="qr-image-frame">
+                <img
+                    src="{{ url_for('plants.dynamic_qr', uid=plant['uid']) }}"
+                    alt="QR Code {{ plant['name'] }}"
+                    id="plantQrImage"
+                >
+            </div>
+
+            <p class="qr-modal-hint">Pindai QR ini untuk membuka halaman informasi tanaman secara langsung.</p>
+
+            <div class="qr-modal-actions">
+                <a
+                    href="{{ url_for('plants.dynamic_qr', uid=plant['uid'], download=1) }}"
+                    class="btn-submit-parchment"
+                    style="text-decoration: none; text-align: center;"
+                >
+                    Download QR (PNG)
+                </a>
+                <button type="button" class="btn-back" style="margin-top: 0;" onclick="closeQrModal()">
+                    Tutup
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- POPUP MODAL EDIT DATA (KHUSUS GURU & P TEROTORISASI) -->
+    {% if g.user and metadata %}
+    <div class="qr-modal-backdrop" id="editModalBackdrop" onclick="closeModalOnBackdrop(event, 'editModalBackdrop')">
+        <div class="qr-modal-card edit-modal-card">
+            <button type="button" class="qr-modal-close" onclick="closeEditModal()" aria-label="Tutup">&times;</button>
+            <h3>Edit Status, Lokasi &amp; Catatan</h3>
+            <p class="qr-modal-code"><code>{{ plant['plant_code'] }}</code></p>
+
+            <form method="POST" action="{{ url_for('plants.edit_plant', uid=plant['uid']) }}" class="adiwiyata-form" style="text-align: left;">
+                <div class="form-group">
+                    <label for="editStatusSelect">Status Kondisi Tanaman *</label>
+                    <select id="editStatusSelect" name="status" required>
+                        <option value="Hidup" {% if plant['status'] == 'Hidup' %}selected{% endif %}>Hidup</option>
+                        <option value="Perawatan Khusus" {% if plant['status'] == 'Perawatan Khusus' %}selected{% endif %}>Perawatan Khusus</option>
+                        <option value="Layu" {% if plant['status'] == 'Layu' %}selected{% endif %}>Layu</option>
+                        <option value="Mati" {% if plant['status'] == 'Mati' %}selected{% endif %}>Mati</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="editPlantTypeInput">Jenis Tanaman * (Cari / Buat Baru)</label>
+                    <div class="searchable-combo">
+                        <input
+                            type="text"
+                            id="editPlantTypeInput"
+                            name="plant_type_name"
+                            value="{{ plant['plant_type_name'] }}"
+                            autocomplete="off"
+                            required
+                        >
+                        <input type="hidden" id="editPlantTypeCodeInput" name="plant_type_code" value="{{ plant['plant_type_code'] }}">
+                        <div class="combo-dropdown" id="editDropdownPlantType"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="editSectorInput">Sektor Sekolah * (Cari / Buat Baru)</label>
+                    <div class="searchable-combo">
+                        <input
+                            type="text"
+                            id="editSectorInput"
+                            name="sector_name"
+                            value="{{ plant['sector_name'] }}"
+                            autocomplete="off"
+                            required
+                        >
+                        <input type="hidden" id="editSectorCodeInput" name="sector_code" value="{{ plant['sector_code'] }}">
+                        <div class="combo-dropdown" id="editDropdownSector"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="editSubsectorInput">Subsektor Spesifik * (Cari / Buat Baru)</label>
+                    <div class="searchable-combo">
+                        <input
+                            type="text"
+                            id="editSubsectorInput"
+                            name="subsector_name"
+                            value="{{ plant['subsector_name'] }}"
+                            autocomplete="off"
+                            required
+                        >
+                        <input type="hidden" id="editSubsectorCodeInput" name="subsector_code" value="{{ plant['subsector_code'] }}">
+                        <div class="combo-dropdown" id="editDropdownSubsector"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="editNotesInput">Catatan Tanaman</label>
+                    <input
+                        type="text"
+                        id="editNotesInput"
+                        name="notes"
+                        value="{{ plant['notes'] or '' }}"
+                        placeholder="Keterangan kondisi media tanam / perawatan..."
+                    >
+                </div>
+
+                <div class="qr-modal-actions" style="margin-top: 10px;">
+                    <button type="submit" class="btn-submit-parchment">Simpan Perubahan</button>
+                    <button type="button" class="btn-back" style="margin-top: 0;" onclick="closeEditModal()">Batal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script id="detailEditConfig" type="application/json">
+        {{ {"metadata": metadata} | tojson }}
+    </script>
+    {% endif %}
+
+    <script src="{{ url_for('static', filename='detail.js') }}"></script>
 </body>
 </html>
