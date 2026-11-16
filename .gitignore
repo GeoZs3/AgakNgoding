@@ -10,3 +10,5 @@ env/
 .gitignore
 
 .env
+
+static/images/
