@@ -41,8 +41,21 @@
                 <p><strong>Penanggung Jawab Wilayah:</strong> {{ plant['manager_code'] }} ({{ plant['manager_name'] }})</p>
                 <p><strong>Kondisi Saat Ini:</strong> {{ plant['status'] }}</p>
 
+                <!-- 1 BOX TERPADU: TAKSONOMI BIOLOGIS & STATUS AI -->
                 <div class="parchment-section">
-                    <h3>Taksonomi Biologis</h3>
+                    <h3>
+                        Taksonomi Biologis
+                        {% if plant['family'] or plant['genus'] or plant['species'] or plant['scientific_name'] %}
+                            {% if plant['taxonomy_verification_status'] == 'verified' %}
+                                <span style="font-size: 12px; background: #c8e6c9; color: #1b5e20; padding: 2px 8px; border-radius: 4px; margin-left: 6px; vertical-align: middle;">Terverifikasi</span>
+                            {% elif plant['taxonomy_verification_status'] == 'pending' %}
+                                <span style="font-size: 12px; background: #fff9c4; color: #827717; padding: 2px 8px; border-radius: 4px; margin-left: 6px; vertical-align: middle;">Hasil AI (Menunggu Verifikasi)</span>
+                            {% elif plant['taxonomy_verification_status'] == 'rejected' %}
+                                <span style="font-size: 12px; background: #ffcdd2; color: #b71c1c; padding: 2px 8px; border-radius: 4px; margin-left: 6px; vertical-align: middle;">Ditolak</span>
+                            {% endif %}
+                        {% endif %}
+                    </h3>
+
                     {% if plant['family'] or plant['genus'] or plant['species'] or plant['scientific_name'] %}
                         <ul class="taxonomy-list">
                             <li><strong>Famili:</strong> {{ plant['family'] or 'Belum diketahui' }}</li>
@@ -50,10 +63,40 @@
                             <li><strong>Spesies:</strong> <em>{{ plant['species'] or 'Belum diketahui' }}</em></li>
                             <li><strong>Nama Ilmiah:</strong> <em>{{ plant['scientific_name'] or 'Belum diketahui' }}</em></li>
                         </ul>
+
+                        {% if g.user and plant['taxonomy_verification_status'] == 'pending' %}
+                        <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
+                            <form method="POST" action="{{ url_for('plants.verify_taxonomy_route', uid=plant['uid']) }}">
+                                <input type="hidden" name="action" value="verified">
+                                <button type="submit" class="btn-qr-small">Verifikasi Taksonomi</button>
+                            </form>
+                            <form method="POST" action="{{ url_for('plants.verify_taxonomy_route', uid=plant['uid']) }}">
+                                <input type="hidden" name="action" value="rejected">
+                                <button type="submit" class="btn-qr-small btn-delete-entry">Tolak Hasil AI</button>
+                            </form>
+                        </div>
+                        {% endif %}
                     {% else %}
-                        <p style="font-style: italic; color: #6d4c41;">
-                            Sedang diproses otomatis oleh AI di balik layar. Muat ulang halaman beberapa saat lagi untuk melihat hasilnya.
-                        </p>
+                        {% if plant['ai_task_status'] == 'failed' %}
+                            <p style="color: #b71c1c; font-size: 14px;">
+                                Identifikasi AI gagal ({{ plant['ai_last_error'] or 'layanan tidak merespons' }}).
+                            </p>
+                            <p style="font-style: italic; color: #6d4c41; margin-top: 4px;">
+                                Status : <strong>{{ plant['ai_task_status'] }}</strong>
+                            </p>
+                            {% if g.user %}
+                            <form method="POST" action="{{ url_for('plants.retry_taxonomy_ai', uid=plant['uid']) }}" style="margin-top: 8px;">
+                                <button type="submit" class="btn-qr-small">Coba Ulang AI</button>
+                            </form>
+                            {% endif %}
+                        {% else %}
+                            <p style="font-style: italic; color: #6d4c41;">
+                                Sedang diproses otomatis oleh AI di balik layar. Muat ulang halaman beberapa saat lagi untuk melihat hasilnya.
+                            </p>
+                            <p style="font-style: italic; color: #6d4c41; margin-top: 6px;">
+                                Status : <strong>{{ plant['ai_task_status'] or 'pending' }}</strong>
+                            </p>
+                        {% endif %}
                     {% endif %}
                 </div>
 
@@ -62,7 +105,7 @@
                     <p>{{ plant['notes'] or 'Tidak ada catatan khusus.' }}</p>
                 </div>
 
-                <!-- NAVIGASI BAWAH & KONTROL OTORISASI -->
+                <!-- NAVIGASI BAWAH: TOMBOL KEMBALI, QR, EDIT & HAPUS -->
                 <div class="detail-footer-actions">
                     <a href="{{ url_for('main.index', masuk=1) }}" class="btn-back" style="margin-top: 0;">&#8592; Kembali ke Pohon</a>
 
@@ -131,7 +174,7 @@
     <div class="qr-modal-backdrop" id="editModalBackdrop" onclick="closeModalOnBackdrop(event, 'editModalBackdrop')">
         <div class="qr-modal-card edit-modal-card">
             <button type="button" class="qr-modal-close" onclick="closeEditModal()" aria-label="Tutup">&times;</button>
-            <h3>Edit Status, Lokasi &amp; Catatan</h3>
+            <h3>Edit Status, Jenis &amp; Lokasi</h3>
             <p class="qr-modal-code"><code>{{ plant['plant_code'] }}</code></p>
 
             <form method="POST" action="{{ url_for('plants.edit_plant', uid=plant['uid']) }}" class="adiwiyata-form" style="text-align: left;">

@@ -2,7 +2,7 @@ PRAGMA foreign_keys = ON;
 
 -- 1. Tabel Penanggung Jawab (9 P, dengan 5 P khusus pengurus tanaman)
 CREATE TABLE IF NOT EXISTS managers (
-    code TEXT PRIMARY KEY,                  -- Contoh: 'P1', 'P2', ..., 'P9'
+    code TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     is_plant_manager INTEGER NOT NULL DEFAULT 0 CHECK (is_plant_manager IN (0, 1)),
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
@@ -28,8 +28,8 @@ CREATE TABLE IF NOT EXISTS users (
 -- 3. Tabel Kamus Sektor (Wilayah Utama Sekolah)
 CREATE TABLE IF NOT EXISTS sectors (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    code TEXT NOT NULL UNIQUE,              -- Singkatan kode sektor (misal: 'GB', 'TU', 'LP')
-    name TEXT NOT NULL UNIQUE,              -- Nama lengkap sektor (misal: 'Gedung Baru')
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL UNIQUE,
     description TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
@@ -55,8 +55,8 @@ CREATE TABLE IF NOT EXISTS sector_managers (
 CREATE TABLE IF NOT EXISTS subsectors (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sector_id INTEGER NOT NULL,
-    code TEXT NOT NULL,                     -- Singkatan kode subsektor (misal: 'TS01')
-    name TEXT NOT NULL,                     -- Contoh: 'Gedung baru - dekat toilet siswa'
+    code TEXT NOT NULL,
+    name TEXT NOT NULL,
     description TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     CONSTRAINT fk_subsector_sector
@@ -73,13 +73,13 @@ CREATE TABLE IF NOT EXISTS subsectors (
 -- 6. Tabel Jenis Tanaman (Klasifikasi Fungsional)
 CREATE TABLE IF NOT EXISTS plant_types (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    code TEXT NOT NULL UNIQUE,              -- Singkatan kode tipe (misal: 'HIAS', 'OBAT', 'TEDUH')
+    code TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL UNIQUE,
     description TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
--- 7. Tabel Taksonomi Biologis
+-- 7. Tabel Taksonomi Biologis (Dengan Status Verifikasi)
 CREATE TABLE IF NOT EXISTS plant_taxonomy (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     kingdom TEXT DEFAULT 'Plantae',
@@ -89,14 +89,16 @@ CREATE TABLE IF NOT EXISTS plant_taxonomy (
     family TEXT,
     genus TEXT,
     species TEXT,
-    scientific_name TEXT UNIQUE,
+    scientific_name TEXT,
+    verification_status TEXT NOT NULL DEFAULT 'verified'
+        CHECK (verification_status IN ('pending', 'verified', 'rejected')),
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 -- 8. Tabel Utama Inventaris Tanaman
 CREATE TABLE IF NOT EXISTS plants (
     uid TEXT PRIMARY KEY CHECK (length(uid) = 36),
-    plant_code TEXT NOT NULL UNIQUE,        -- Format: SEKTOR-SUB-IDSUBSEKTOR-TIPETANAMAN-P
+    plant_code TEXT NOT NULL UNIQUE,
     subsector_seq INTEGER NOT NULL CHECK (subsector_seq >= 1),
     name TEXT NOT NULL,
     quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 0),
@@ -139,7 +141,26 @@ CREATE TABLE IF NOT EXISTS plants (
         UNIQUE (subsector_id, subsector_seq)
 );
 
--- Indexes untuk optimasi pencarian & filter 3-state tags
+-- 9. Tabel Status Proses Taksonomi AI Persisten
+CREATE TABLE IF NOT EXISTS ai_taxonomy_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plant_uid TEXT NOT NULL UNIQUE,
+    plant_name TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 3,
+    last_error TEXT,
+    locked_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    CONSTRAINT fk_ai_task_plant
+        FOREIGN KEY (plant_uid)
+        REFERENCES plants (uid)
+        ON DELETE CASCADE
+);
+
+-- Indexes untuk optimasi pencarian, filter, dan antrean AI
 CREATE INDEX IF NOT EXISTS idx_subsectors_sector_id ON subsectors (sector_id);
 CREATE INDEX IF NOT EXISTS idx_plants_plant_code ON plants (plant_code);
 CREATE INDEX IF NOT EXISTS idx_plants_name ON plants (name);
@@ -149,3 +170,5 @@ CREATE INDEX IF NOT EXISTS idx_plants_subsector_id ON plants (subsector_id);
 CREATE INDEX IF NOT EXISTS idx_plants_taxonomy_id ON plants (taxonomy_id);
 CREATE INDEX IF NOT EXISTS idx_taxonomy_family ON plant_taxonomy (family);
 CREATE INDEX IF NOT EXISTS idx_taxonomy_genus ON plant_taxonomy (genus);
+CREATE INDEX IF NOT EXISTS idx_taxonomy_verification_status ON plant_taxonomy (verification_status);
+CREATE INDEX IF NOT EXISTS idx_ai_tasks_status ON ai_taxonomy_tasks (status);
