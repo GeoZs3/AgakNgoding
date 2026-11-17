@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Adiwiyata — Gerbang Ekologi Sekolah</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='portal.css') }}">
+</head>
+<body>
+
+    <div class="portal-curtain" id="portalCurtain" aria-hidden="true"></div>
+
+    <main class="portal-viewport" id="portalViewport" data-target-url="{{ url_for('main.home') }}">
+        <!-- Lapisan Atmosfer & Partikel Cahaya Hutan -->
+        <div class="canopy-sunbeams" aria-hidden="true"></div>
+        <div class="floating-spores" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+
+        <!-- Tajuk Atas Portal -->
+        <header class="portal-intro">
+            <span class="portal-eyebrow">Program Peduli &amp; Berbudaya Lingkungan</span>
+            <h1 class="portal-heading">Gerbang Adiwiyata</h1>
+            <p class="portal-sub">Ketuk pintu pada pohon kehidupan untuk memasuki ruang informasi ekologi sekolah.</p>
+        </header>
+
+        <!-- Ilustrasi Pohon Besar & Pintu Interaktif -->
+        <section class="tree-sanctuary" aria-label="Pohon interaktif menuju halaman utama">
+            <div class="tree-camera-rig" id="treeCameraRig">
+                <!-- Ilustrasi Pohon Organik SVG -->
+                <svg class="ancient-tree-svg" viewBox="0 0 900 760" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <defs>
+                        <radialGradient id="canopyGlow" cx="50%" cy="35%" r="55%">
+                            <stop offset="0%" stop-color="#87A96B" stop-opacity="0.45"/>
+                            <stop offset="65%" stop-color="#2D4F3E" stop-opacity="0.18"/>
+                            <stop offset="100%" stop-color="#1A3327" stop-opacity="0"/>
+                        </radialGradient>
+                        <linearGradient id="trunkGrad" x1="450" y1="220" x2="450" y2="750" gradientUnits="userSpaceOnUse">
+                            <stop offset="0%" stop-color="#4A3728"/>
+                            <stop offset="55%" stop-color="#3A291D"/>
+                            <stop offset="100%" stop-color="#261A12"/>
+                        </linearGradient>
+                        <linearGradient id="foliageDeep" x1="200" y1="60" x2="700" y2="420" gradientUnits="userSpaceOnUse">
+                            <stop offset="0%" stop-color="#2F523E"/>
+                            <stop offset="100%" stop-color="#1B3628"/>
+                        </linearGradient>
+                        <linearGradient id="foliageSage" x1="180" y1="90" x2="680" y2="380" gradientUnits="userSpaceOnUse">
+                            <stop offset="0%" stop-color="#6B8E6E"/>
+                            <stop offset="100%" stop-color="#3E634D"/>
+                        </linearGradient>
+                    </defs>
+
+                    <!-- Aura Cahaya Kanopi -->
+                    <circle cx="450" cy="270" r="340" fill="url(#canopyGlow)"/>
+
+                    <!-- Kanopi Dedaunan Lapis Belakang -->
+                    <path d="M130 330C90 250 155 150 255 140C295 75 410 50 485 88C565 48 680 85 710 165C795 190 825 290 755 355C690 415 570 390 450 395C325 400 175 415 130 330Z" fill="url(#foliageDeep)"/>
+
+                    <!-- Kanopi Dedaunan Lapis Tengah -->
+                    <path d="M185 305C155 240 215 165 295 160C335 105 435 90 495 125C560 95 650 130 675 195C735 220 750 295 690 340C625 385 535 360 450 365C360 370 220 375 185 305Z" fill="url(#foliageSage)" opacity="0.88"/>
+
+                    <!-- Akar & Batang Utama Pohon -->
+                    <path d="M355 290C362 390 338 545 220 735L315 745C350 695 375 685 450 685C525 685 550 695 585 745L680 735C562 545 538 390 545 290C510 315 390 315 355 290Z" fill="url(#trunkGrad)"/>
+
+                    <!-- Tekstur Serat Kayu Organik -->
+                    <path d="M388 335C392 430 375 555 322 685" stroke="#5E4634" stroke-width="4" stroke-linecap="round" opacity="0.55"/>
+                    <path d="M512 335C508 430 525 555 578 685" stroke="#5E4634" stroke-width="4" stroke-linecap="round" opacity="0.55"/>
+                    <path d="M450 320V410" stroke="#5E4634" stroke-width="3" stroke-linecap="round" opacity="0.4"/>
+
+                    <!-- Sulur Tanaman & Daun Gantung -->
+                    <path d="M245 340C245 395 235 435 242 475" stroke="#7A9E7E" stroke-width="3" stroke-linecap="round"/>
+                    <ellipse cx="235" cy="400" rx="8" ry="4" transform="rotate(-25 235 400)" fill="#8DB38B"/>
+                    <ellipse cx="250" cy="445" rx="8" ry="4" transform="rotate(20 250 445)" fill="#8DB38B"/>
+
+                    <path d="M660 335C665 390 655 430 662 468" stroke="#7A9E7E" stroke-width="3" stroke-linecap="round"/>
+                    <ellipse cx="670" cy="395" rx="8" ry="4" transform="rotate(25 670 395)" fill="#8DB38B"/>
+                    <ellipse cx="654" cy="440" rx="8" ry="4" transform="rotate(-20 654 440)" fill="#8DB38B"/>
+
+                    <!-- Tanah & Lumut Dasar -->
+                    <ellipse cx="450" cy="740" rx="310" ry="22" fill="#233D2E"/>
+                    <ellipse cx="450" cy="738" rx="220" ry="12" fill="#4B6F56" opacity="0.7"/>
+                </svg>
+
+                <!-- PINTU INTERAKTIF DI BATANG POHON -->
+                <div class="tree-doorway-frame">
+                    <div class="door-interior-glow" aria-hidden="true"></div>
+                    <button
+                        type="button"
+                        class="wooden-portal-door"
+                        id="portalDoorBtn"
+                        aria-label="Buka pintu pohon untuk masuk ke beranda Adiwiyata"
+                    >
+                        <span class="door-arch-trim"></span>
+                        <span class="door-plank-lines"></span>
+                        <span class="door-botanical-crest">&#10047;</span>
+                        <span class="door-handle"></span>
+                        <span class="door-action-tag">Masuk</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tautan Cepat Aksesibilitas / Langsung ke Beranda -->
+        <footer class="portal-footer">
+            <a href="{{ url_for('main.home') }}" class="portal-skip-link" id="directEnterLink">
+                Lewati animasi &amp; langsung ke Beranda &rarr;
+            </a>
+        </footer>
+    </main>
+
+    <script src="{{ url_for('static', filename='portal.js') }}"></script>
+</body>
+</html>

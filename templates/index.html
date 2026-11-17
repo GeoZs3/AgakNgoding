@@ -20,8 +20,12 @@
         <div class="library-room">
 
             <!-- BARIS NAVIGASI PENGURUS (GURU & P) -->
+            <!-- BARIS NAVIGASI PENGURUS & TAUTAN BERANDA -->
             <div class="library-top-bar">
-                <div class="library-title-badge">Arsip Inventaris Adiwiyata</div>
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <a href="{{ url_for('main.home') }}" class="action-link-btn">&larr; Beranda Adiwiyata</a>
+                    <div class="library-title-badge">Katalog Inventaris Tanaman</div>
+                </div>
                 <div class="library-auth-actions">
                     {% if g.user %}
                         <span class="user-badge">{{ g.user['full_name'] }} ({{ g.user['manager_code'] or 'Guru' }})</span>

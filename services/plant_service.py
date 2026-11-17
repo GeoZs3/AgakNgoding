@@ -863,3 +863,34 @@ def verify_plant_taxonomy(db: sqlite3.Connection, uid: str, action: str) -> None
                 "UPDATE plant_taxonomy SET verification_status = ? WHERE id = ?",
                 (action, tx_id),
             )
+
+def get_adiwiyata_impact_stats(db: sqlite3.Connection) -> Dict[str, int]:
+    """
+    Mengambil statistik dampak lingkungan secara aktual dari database SQLite.
+    Mengembalikan angka 0 apabila tabel masih kosong (tanpa data rekayasa).
+    """
+    plant_row = db.execute(
+        """
+        SELECT
+            COUNT(*) AS total_records,
+            COALESCE(SUM(quantity), 0) AS total_individuals,
+            COUNT(DISTINCT plant_type_id) AS active_plant_types
+        FROM plants
+        """
+    ).fetchone()
+
+    sector_row = db.execute("SELECT COUNT(*) AS total_sectors FROM sectors").fetchone()
+    type_row = db.execute("SELECT COUNT(*) AS total_types FROM plant_types").fetchone()
+
+    total_records = int(plant_row["total_records"]) if plant_row else 0
+    total_individuals = int(plant_row["total_individuals"]) if plant_row else 0
+    total_sectors = int(sector_row["total_sectors"]) if sector_row else 0
+    # Tampilkan jumlah kategori fungsional yang tersedia/tercatat
+    total_categories = int(type_row["total_types"]) if type_row else 0
+
+    return {
+        "total_records": total_records,
+        "total_individuals": total_individuals,
+        "total_sectors": total_sectors,
+        "total_categories": total_categories,
+    }

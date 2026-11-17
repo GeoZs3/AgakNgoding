@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beranda Adiwiyata — Merawat Bumi Dimulai dari Sekolah</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='home.css') }}">
+</head>
+<body>
+
+    <!-- NAVBAR STICKY & RESPONSIF -->
+    <header class="site-navbar" id="siteNavbar">
+        <div class="nav-container">
+            <a href="{{ url_for('main.home') }}" class="nav-brand">
+                <span class="brand-leaf" aria-hidden="true">&#127807;</span>
+                <span class="brand-text">Adiwiyata</span>
+            </a>
+
+            <button
+                type="button"
+                class="nav-mobile-toggle"
+                id="navMobileToggle"
+                aria-label="Buka menu navigasi"
+                aria-expanded="false"
+                aria-controls="navMenu"
+            >
+                <span></span><span></span><span></span>
+            </button>
+
+            <nav class="nav-menu" id="navMenu" aria-label="Navigasi utama">
+                <a href="#hero" class="nav-link">Beranda</a>
+                <a href="#tentang" class="nav-link">Tentang</a>
+                <a href="#dampak" class="nav-link">Dampak</a>
+                <a href="#aksi-hijau" class="nav-link">Aksi Hijau</a>
+                <a href="{{ url_for('main.index') }}" class="nav-link nav-catalog-link">Cari Tanaman</a>
+
+                <div class="nav-auth-slot">
+                    {% if g.user %}
+                        <a href="{{ url_for('plants.add_plant') }}" class="nav-btn-primary">+ Catat Tanaman</a>
+                        <a href="{{ url_for('auth.logout') }}" class="nav-btn-ghost">Keluar</a>
+                    {% else %}
+                        <a href="{{ url_for('auth.login') }}" class="nav-btn-primary">Login Pengurus</a>
+                    {% endif %}
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <!-- 1. HERO SECTION -->
+        <section id="hero" class="hero-section">
+            <div class="hero-parallax-bg" data-parallax-speed="0.22" aria-hidden="true"></div>
+            <div class="container hero-grid">
+                <div class="hero-copy">
+                    <span class="section-eyebrow hero-entrance" style="--delay: 0.05s;">
+                        Ekosistem Pendidikan &amp; Inventaris Hijau Sekolah
+                    </span>
+                    <h1 class="hero-title hero-entrance" style="--delay: 0.16s;">
+                        Merawat Bumi Dimulai dari Sekolah.
+                    </h1>
+                    <p class="hero-lead hero-entrance" style="--delay: 0.28s;">
+                        Mewujudkan lingkungan belajar yang lestari melalui pendataan keanekaragaman hayati sekolah, pembiasaan perilaku ramah lingkungan, dan kolaborasi warga sekolah yang berkelanjutan.
+                    </p>
+                    <div class="hero-actions hero-entrance" style="--delay: 0.4s;">
+                        <a href="{{ url_for('main.index') }}" class="btn-forest">
+                            Jelajahi Katalog Tanaman &rarr;
+                        </a>
+                        <a href="#tentang" class="btn-cream-outline">
+                            Pelajari Program
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Visual Ilustrasi Lingkungan Hijau Editorial -->
+                <div class="hero-visual hero-entrance" style="--delay: 0.24s;">
+                    <div class="botanical-arch-card" data-parallax-speed="-0.12">
+                        <svg viewBox="0 0 460 520" fill="none" xmlns="http://www.w3.org/2000/svg" class="botanical-art-svg" role="img" aria-label="Ilustrasi konservasi flora sekolah">
+                            <defs>
+                                <linearGradient id="archBg" x1="230" y1="20" x2="230" y2="500" gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="#DCE7D8"/>
+                                    <stop offset="100%" stop-color="#B9CEB4"/>
+                                </linearGradient>
+                                <linearGradient id="hillBack" x1="0" y1="340" x2="460" y2="520" gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="#6F9278"/>
+                                    <stop offset="100%" stop-color="#44664E"/>
+                                </linearGradient>
+                                <linearGradient id="hillFront" x1="0" y1="390" x2="460" y2="520" gradientUnits="userSpaceOnUse">
+                                    <stop offset="0%" stop-color="#2D4F3E"/>
+                                    <stop offset="100%" stop-color="#1B3529"/>
+                                </linearGradient>
+                            </defs>
+
+                            <rect x="16" y="16" width="428" height="488" rx="214" fill="url(#archBg)"/>
+                            <circle cx="325" cy="128" r="46" fill="#F5DFB0" opacity="0.85"/>
+
+                            <!-- Siluet Bukit & Taman Sekolah -->
+                            <path d="M16 375C120 330 220 350 315 385C375 405 415 390 444 375V504H16V375Z" fill="url(#hillBack)"/>
+                            <path d="M16 420C140 390 270 430 444 395V504H16V420Z" fill="url(#hillFront)"/>
+
+                            <!-- Tangkai Botani Utama -->
+                            <path d="M225 450C222 330 232 215 248 125" stroke="#234233" stroke-width="6" stroke-linecap="round"/>
+                            <!-- Daun Kiri -->
+                            <path d="M226 355C165 345 125 305 120 265C168 265 208 295 226 355Z" fill="#44664E"/>
+                            <path d="M229 275C170 260 138 220 138 182C182 186 214 218 229 275Z" fill="#6F9278"/>
+                            <path d="M236 200C192 185 168 152 172 120C206 128 228 155 236 200Z" fill="#2D4F3E"/>
+                            <!-- Daun Kanan -->
+                            <path d="M228 320C288 308 332 268 338 226C288 228 248 260 228 320Z" fill="#2D4F3E"/>
+                            <path d="M233 240C288 224 322 184 324 146C280 152 248 184 233 240Z" fill="#6F9278"/>
+                            <!-- Kuncup Bunga Terracotta -->
+                            <circle cx="249" cy="116" r="14" fill="#B86B4B"/>
+                            <circle cx="249" cy="116" r="6" fill="#F6F1E7"/>
+                        </svg>
+                        <div class="arch-caption">
+                            <span>Arsip Hidup</span>
+                            <strong>Flora &amp; Ekosistem Sekolah</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. ABOUT ADIWIYATA -->
+        <section id="tentang" class="about-section section-spacing">
+            <div class="container">
+                <div class="editorial-split">
+                    <div class="reveal-on-scroll">
+                        <span class="section-eyebrow">Tentang Program</span>
+                        <h2 class="section-title">Menyatukan Pendidikan Karakter dengan Kepedulian Ekologis</h2>
+                    </div>
+                    <div class="about-narrative reveal-on-scroll" style="--stagger: 1;">
+                        <p>
+                            <strong>Adiwiyata</strong> merupakan gerakan pendidikan lingkungan hidup yang mendorong terciptanya pengetahuan, kesadaran, dan budaya warga sekolah dalam upaya pelestarian fungsi lingkungan.
+                        </p>
+                        <p>
+                            Melalui integrasi pembelajaran di kelas dan pengelolaan ruang terbuka hijau secara terukur, setiap siswa, guru, dan pengelola wilayah diajak mengenali keanekaragaman tanaman di sekitar mereka secara ilmiah maupun praktis.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="pillars-grid">
+                    <article class="pillar-card reveal-on-scroll" style="--stagger: 0;">
+                        <span class="pillar-num">01</span>
+                        <h3>Edukasi Berbasis Konteks</h3>
+                        <p>Menjadikan taman dan koleksi flora sekolah sebagai laboratorium hidup lintas mata pelajaran.</p>
+                    </article>
+                    <article class="pillar-card reveal-on-scroll" style="--stagger: 1;">
+                        <span class="pillar-num">02</span>
+                        <h3>Tanggung Jawab Kolektif</h3>
+                        <p>Pembagian wilayah pemeliharaan yang terstruktur antara pengurus tanaman (P), siswa, dan pembina.</p>
+                    </article>
+                    <article class="pillar-card reveal-on-scroll" style="--stagger: 2;">
+                        <span class="pillar-num">03</span>
+                        <h3>Inventarisasi Transparan</h3>
+                        <p>Pencatatan kondisi, lokasi subsektor, serta identitas QR code setiap tanaman untuk pemantauan berkelanjutan.</p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. ENVIRONMENTAL DATA & IMPACT (DATA AKTUAL SQLITE) -->
+        <section id="dampak" class="impact-section section-spacing">
+            <div class="container">
+                <div class="impact-header reveal-on-scroll">
+                    <span class="section-eyebrow light">Data &amp; Dampak Lingkungan</span>
+                    <h2 class="section-title light">Rekam Jejak Ekologi Terkini</h2>
+                    <p class="impact-subtitle">
+                        Seluruh angka di bawah ini dihitung secara otomatis dari arsip inventaris SQLite sekolah saat ini.
+                    </p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card reveal-on-scroll" style="--stagger: 0;">
+                        <span class="stat-value" data-counter="{{ stats['total_records'] }}">0</span>
+                        <span class="stat-label">Catatan Spesimen Tanaman</span>
+                        <span class="stat-note">Entri terarsip di database</span>
+                    </div>
+
+                    <div class="stat-card reveal-on-scroll" style="--stagger: 1;">
+                        <span class="stat-value" data-counter="{{ stats['total_individuals'] }}">0</span>
+                        <span class="stat-label">Total Individu Tanaman</span>
+                        <span class="stat-note">Akumulasi populasi tercatat</span>
+                    </div>
+
+                    <div class="stat-card reveal-on-scroll" style="--stagger: 2;">
+                        <span class="stat-value" data-counter="{{ stats['total_sectors'] }}">0</span>
+                        <span class="stat-label">Sektor Wilayah Sekolah</span>
+                        <span class="stat-note">Zona pemetaan ruang hijau</span>
+                    </div>
+
+                    <div class="stat-card reveal-on-scroll" style="--stagger: 3;">
+                        <span class="stat-value" data-counter="{{ stats['total_categories'] }}">0</span>
+                        <span class="stat-label">Kategori Fungsional</span>
+                        <span class="stat-note">Klasifikasi jenis tanaman</span>
+                    </div>
+                </div>
+
+                {% if stats['total_records'] == 0 %}
+                <div class="impact-empty-banner reveal-on-scroll">
+                    <p>
+                        Belum ada catatan tanaman di database saat ini. Pengurus (Guru / P) dapat mulai menambahkan data melalui katalog untuk memperbarui statistik secara otomatis.
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </section>
+
+        <!-- 4. ENVIRONMENTAL INITIATIVES (KERANGKA BIDANG KEGIATAN) -->
+        <section id="aksi-hijau" class="initiatives-section section-spacing">
+            <div class="container">
+                <div class="section-heading-center reveal-on-scroll">
+                    <span class="section-eyebrow">Kerangka Aksi Hijau</span>
+                    <h2 class="section-title">Lima Pilar Fokus Kegiatan Lingkungan</h2>
+                    <p class="section-desc">
+                        Struktur bidang kegiatan berikut menjadi acuan pengembangan program ramah lingkungan yang dapat disesuaikan dengan agenda sekolah.
+                    </p>
+                </div>
+
+                <div class="initiatives-grid">
+                    <article class="initiative-card reveal-on-scroll" style="--stagger: 0;">
+                        <div class="initiative-icon">&#127793;</div>
+                        <h3>Keanekaragaman Hayati</h3>
+                        <p>Pemetaan jenis flora lokal, tanaman obat keluarga (TOGA), tanaman hias, serta pemantauan kesehatan tanaman di tiap sektor.</p>
+                    </article>
+
+                    <article class="initiative-card reveal-on-scroll" style="--stagger: 1;">
+                        <div class="initiative-icon">&#9851;</div>
+                        <h3>Pengelolaan Sampah</h3>
+                        <p>Pemilahan sampah organik dan anorganik di area kelas maupun taman, serta pemanfaatan kompos untuk media tanam sekolah.</p>
+                    </article>
+
+                    <article class="initiative-card reveal-on-scroll" style="--stagger: 2;">
+                        <div class="initiative-icon">&#128167;</div>
+                        <h3>Konservasi Air</h3>
+                        <p>Efisiensi penyiraman taman sekolah, pemeliharaan area resapan air hujan, dan pemantauan saluran drainase ramah lingkungan.</p>
+                    </article>
+
+                    <article class="initiative-card reveal-on-scroll" style="--stagger: 3;">
+                        <div class="initiative-icon">&#9728;</div>
+                        <h3>Konservasi Energi</h3>
+                        <p>Optimalisasi pencahayaan alami ruang belajar, sirkulasi udara silang dari vegetasi, dan pembiasaan hemat listrik harian.</p>
+                    </article>
+
+                    <article class="initiative-card reveal-on-scroll" style="--stagger: 4;">
+                        <div class="initiative-icon">&#128214;</div>
+                        <h3>Pendidikan Lingkungan</h3>
+                        <p>Pemanfaatan label QR code tanaman sebagai media literasi botani mandiri bagi seluruh siswa dan pengunjung sekolah.</p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. EXPLORE THE GREEN WORLD (CTA KE KATALOG) -->
+        <section class="cta-catalog-section section-spacing">
+            <div class="container">
+                <div class="cta-botanical-banner reveal-on-scroll">
+                    <div class="cta-content">
+                        <span class="section-eyebrow light">Katalog Digital Sekolah</span>
+                        <h2>Jelajahi Katalog Tanaman &amp; Taksonomi</h2>
+                        <p>
+                            Telusuri seluruh koleksi tanaman sekolah berdasarkan nama, jenis fungsional, lokasi sektor, status kondisi, hingga klasifikasi famili dan genus.
+                        </p>
+                        <div class="cta-buttons">
+                            <a href="{{ url_for('main.index') }}" class="btn-cream-solid">
+                                Buka Katalog Tanaman &rarr;
+                            </a>
+                            <a href="{{ url_for('main.portal') }}" class="btn-outline-light">
+                                Kembali ke Gerbang Pohon
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-inner">
+            <div>
+                <strong>Proyek Adiwiyata</strong>
+                <p>Platform Informasi Lingkungan &amp; Inventaris Flora Sekolah</p>
+            </div>
+            <div class="footer-links">
+                <a href="{{ url_for('main.portal') }}">Tree Portal</a>
+                <a href="{{ url_for('main.home') }}">Beranda</a>
+                <a href="{{ url_for('main.index') }}">Katalog Tanaman</a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='home.js') }}"></script>
+</body>
+</html>
