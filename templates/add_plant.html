@@ -14,7 +14,11 @@
                 <div class="parchment-title-area">
                     <h1>Catat Tanaman Baru</h1>
                     {% if g.user %}
-                        <p>Petugas Login: <strong>{{ g.user['full_name'] }} ({{ g.user['manager_code'] or 'Guru' }})</strong></p>
+                        <p>Petugas Login: <strong>{{ g.user['full_name'] }} (
+                            {% if g.user['is_admin'] or g.user['is_superadmin'] %}Admin
+                            {% elif g.user['role'] == 'p_manager' %}P {{ g.user['manager_code'] }}
+                            {% else %}Guru{% endif %}
+                        )</strong></p>
                     {% endif %}
                 </div>
                 <a href="{{ url_for('main.index', masuk=1) }}" class="btn-back" style="margin-top: 0;">&#8592; Batal &amp; Kembali</a>
@@ -160,5 +164,8 @@
         } | tojson }}
     </script>
     <script src="{{ url_for('static', filename='add_plant.js') }}"></script>
+    {% if g.user %}
+    <script src="{{ url_for('static', filename='presence.js') }}" data-presence-url="{{ url_for('auth.presence') }}" defer></script>
+    {% endif %}
 </body>
 </html>

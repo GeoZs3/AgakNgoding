@@ -1,97 +1,74 @@
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from flask import current_app, g
 
 
 def get_db() -> sqlite3.Connection:
-    """Membuka atau mengembalikan koneksi SQLite per-request."""
+    """Mengambil atau membuat koneksi SQLite aktif dengan PRAGMA foreign_keys = ON."""
     if "db" not in g:
-        db_path = Path(current_app.config["DATABASE_PATH"])
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(db_path, timeout=15.0)
+        db_path: Path = current_app.config["DATABASE_PATH"]
+        conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON;")
-        conn.execute("PRAGMA busy_timeout = 10000;")
         g.db = conn
     return g.db
 
 
-def close_db(e=None) -> None:
-    """Menutup koneksi SQLite di akhir request."""
+def close_db(exception=None) -> None:
+    """Menutup koneksi database saat request selesai."""
     db = g.pop("db", None)
     if db is not None:
         db.close()
 
 
-def run_safe_migrations(conn: sqlite3.Connection) -> None:
+def init_db(app) -> None:
     """
-    Migrasi non-destruktif untuk database SQLite yang sudah ada maupun database baru:
-    - Jika tabel plant_taxonomy sudah ada (DB lama), pastikan kolom verification_status dan indeksnya tersedia.
-    - Jika database baru, schema.sql akan membuat plant_taxonomy beserta kolom dan indeksnya.
+    Membuat folder instance, upload folder, file database SQLite, dan seluruh tabel
+    secara idempoten tanpa mengisi data dummy.
     """
-    cols = {
-        row["name"]
-        for row in conn.execute("PRAGMA table_info(plant_taxonomy)").fetchall()
-    }
-    if cols:
-        if "verification_status" not in cols:
+    db_path: Path = app.config["DATABASE_PATH"]
+    schema_path: Path = app.config["SCHEMA_PATH"]
+    upload_dir: Path = app.config["UPLOAD_FOLDER"]
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    with closing(sqlite3.connect(db_path)) as conn:
+        with conn:
+            conn.execute("PRAGMA foreign_keys = ON;")
+            with open(schema_path, "r", encoding="utf-8") as schema_file:
+                conn.executescript(schema_file.read())
+
+            user_columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()
+            }
+            migrations = {
+                "is_admin": "INTEGER NOT NULL DEFAULT 0 CHECK (is_admin IN (0, 1))",
+                "is_superadmin": "INTEGER NOT NULL DEFAULT 0 CHECK (is_superadmin IN (0, 1))",
+                "can_edit_plants": "INTEGER NOT NULL DEFAULT 1 CHECK (can_edit_plants IN (0, 1))",
+                "last_seen_at": "TEXT",
+            }
+            for column, definition in migrations.items():
+                if column not in user_columns:
+                    conn.execute(f"ALTER TABLE users ADD COLUMN {column} {definition}")
+
+            conn.execute("UPDATE users SET can_edit_plants = 1 WHERE can_edit_plants != 1")
+
             conn.execute(
                 """
-                ALTER TABLE plant_taxonomy
-                ADD COLUMN verification_status TEXT NOT NULL DEFAULT 'verified'
+                CREATE TABLE IF NOT EXISTS active_sessions (
+                    session_id TEXT PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    last_seen_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                    CONSTRAINT fk_active_session_user
+                        FOREIGN KEY (user_id)
+                        REFERENCES users (id)
+                        ON DELETE CASCADE
+                )
                 """
             )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_taxonomy_verification_status
-                ON plant_taxonomy (verification_status)
-            """
-        )
-
-    plants_exists = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='plants'"
-    ).fetchone()
-    if plants_exists:
-        conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS ai_taxonomy_tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                plant_uid TEXT NOT NULL UNIQUE,
-                plant_name TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending'
-                    CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
-                attempt_count INTEGER NOT NULL DEFAULT 0,
-                max_attempts INTEGER NOT NULL DEFAULT 3,
-                last_error TEXT,
-                locked_at TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-                updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-                CONSTRAINT fk_ai_task_plant
-                    FOREIGN KEY (plant_uid)
-                    REFERENCES plants (uid)
-                    ON DELETE CASCADE
-            );
-            CREATE INDEX IF NOT EXISTS idx_ai_tasks_status
-                ON ai_taxonomy_tasks (status);
-            """
-        )
-
-
-def init_db(app) -> None:
-    """Inisialisasi skema & migrasi aman saat aplikasi dimulai."""
-    db_path = Path(app.config["DATABASE_PATH"])
-    schema_path = Path(app.config["SCHEMA_PATH"])
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    conn = sqlite3.connect(db_path, timeout=15.0)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
-    try:
-        with conn:
-            # 1. Jalankan migrasi kolom/tabel baru terlebih dahulu untuk DB lama
-            run_safe_migrations(conn)
-            # 2. Jalankan schema.sql (aman untuk DB baru maupun DB lama)
-            if schema_path.exists():
-                conn.executescript(schema_path.read_text(encoding="utf-8"))
-    finally:
-        conn.close()
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_active_sessions_user_id "
+                "ON active_sessions (user_id)"
+            )

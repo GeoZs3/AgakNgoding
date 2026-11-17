@@ -146,7 +146,16 @@ def detail(uid: str):
         abort(404)
 
     show_qr_modal = request.args.get("show_qr") == "1"
-    metadata = get_form_cascading_metadata(db) if g.get("user") else None
+    user = g.get("user")
+    can_edit = bool(
+        user
+        and (
+            user["role"] in ("p_manager", "guru")
+            or user["is_admin"]
+            or user["is_superadmin"]
+        )
+    )
+    metadata = get_form_cascading_metadata(db) if can_edit else None
 
     return render_template(
         "detail.html",

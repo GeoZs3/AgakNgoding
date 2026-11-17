@@ -260,6 +260,9 @@
     </script>
     {% endif %}
 
+    {% if g.user %}
+    <script src="{{ url_for('static', filename='presence.js') }}" data-presence-url="{{ url_for('auth.presence') }}" defer></script>
+    {% endif %}
     <script src="{{ url_for('static', filename='detail.js') }}"></script>
 </body>
 </html>

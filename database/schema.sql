@@ -17,6 +17,10 @@ CREATE TABLE IF NOT EXISTS users (
     role TEXT NOT NULL CHECK (role IN ('guru', 'p_manager')),
     manager_code TEXT,
     is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    is_admin INTEGER NOT NULL DEFAULT 0 CHECK (is_admin IN (0, 1)),
+    is_superadmin INTEGER NOT NULL DEFAULT 0 CHECK (is_superadmin IN (0, 1)),
+    can_edit_plants INTEGER NOT NULL DEFAULT 1 CHECK (can_edit_plants IN (0, 1)),
+    last_seen_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     CONSTRAINT fk_user_manager
         FOREIGN KEY (manager_code)
@@ -24,6 +28,18 @@ CREATE TABLE IF NOT EXISTS users (
         ON UPDATE CASCADE
         ON DELETE SET NULL
 );
+
+CREATE TABLE IF NOT EXISTS active_sessions (
+    session_id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    last_seen_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    CONSTRAINT fk_active_session_user
+        FOREIGN KEY (user_id)
+        REFERENCES users (id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_active_sessions_user_id ON active_sessions (user_id);
 
 -- 3. Tabel Kamus Sektor (Wilayah Utama Sekolah)
 CREATE TABLE IF NOT EXISTS sectors (

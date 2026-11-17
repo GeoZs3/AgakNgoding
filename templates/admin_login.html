@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Monitor - Adiwiyata</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+</head>
+<body class="monitor-body">
+    <main class="monitor-login-page">
+        <section class="monitor-login-card">
+            <a class="monitor-brand" href="{{ url_for('main.index', masuk=1) }}">
+                <span class="monitor-brand-mark">A</span>
+                <span>ADIWIYATA<small>SECURE MONITOR ACCESS</small></span>
+            </a>
+            <span class="monitor-kicker"><span></span> ADMINISTRATOR ONLY</span>
+            <h1>Login Monitor</h1>
+            <p>Gunakan akun Admin untuk membuka pusat monitoring dan mengelola akun.</p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="monitor-flashes">
+                        {% for category, message in messages %}
+                            <div class="monitor-flash {{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <form method="POST" class="monitor-login-form">
+                <label for="username">Username administrator</label>
+                <input id="username" name="username" autocomplete="username" required autofocus>
+                <label for="password">Kata sandi</label>
+                <input id="password" name="password" type="password" autocomplete="current-password" required>
+                <button class="monitor-button" type="submit">MASUK KE MONITOR <span>↗</span></button>
+            </form>
+            <a class="monitor-login-back" href="{{ url_for('main.index', masuk=1) }}">← Kembali ke arsip</a>
+        </section>
+    </main>
+</body>
+</html>

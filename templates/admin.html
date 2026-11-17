@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin / Monitor - Adiwiyata</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+</head>
+<body class="monitor-body">
+    <div class="monitor-shell">
+        <aside class="monitor-sidebar">
+            <a class="monitor-brand" href="{{ url_for('main.index', masuk=1) }}">
+                <span class="monitor-brand-mark">A</span>
+                <span>ADIWIYATA<small>CONTROL ROOM</small></span>
+            </a>
+            <div class="monitor-nav-label">WORKSPACE</div>
+            <nav class="monitor-nav">
+                <a class="active" href="#overview"><span>◈</span> Ringkasan</a>
+                <a href="#plants"><span>▤</span> Data tanaman</a>
+                <a href="#accounts"><span>◎</span> Akun &amp; akses</a>
+            </nav>
+            <div class="monitor-sidebar-foot">
+                <span class="monitor-live-dot"></span>
+                SISTEM TERHUBUNG
+                <a href="{{ url_for('main.index', masuk=1) }}">← Kembali ke arsip</a>
+            </div>
+        </aside>
+
+        <main class="monitor-main">
+            <header class="monitor-topbar">
+                <div class="monitor-breadcrumb">PANEL / <strong>MONITOR</strong></div>
+                <div class="monitor-user">
+                    <span class="monitor-live-dot"></span>
+                    <span>{{ g.user['full_name'] }} <small>ADMIN</small></span>
+                    <a href="{{ url_for('auth.change_password') }}">Ganti password</a>
+                    <a href="{{ url_for('auth.logout') }}">Keluar</a>
+                </div>
+            </header>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="monitor-flashes">
+                        {% for category, message in messages %}
+                            <div class="monitor-flash {{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <section class="monitor-hero" id="overview">
+                <div class="monitor-kicker"><span></span> LIVE INVENTORY MONITOR</div>
+                <h1>Admin / Monitor</h1>
+                <p>Pantau inventaris tanaman, akun pengelola, dan hak akses dalam satu tempat.</p>
+            </section>
+
+            <section class="monitor-stats" aria-label="Ringkasan inventaris">
+                <article class="monitor-stat-card">
+                    <span>DATA TANAMAN</span>
+                    <strong>{{ summary['plant_records'] }}</strong>
+                    <small>entri inventaris</small>
+                </article>
+                <article class="monitor-stat-card accent-orange">
+                    <span>JUMLAH UNIT</span>
+                    <strong>{{ summary['plant_units'] }}</strong>
+                    <small>unit tanaman tercatat</small>
+                </article>
+                <article class="monitor-stat-card accent-green">
+                    <span>AKUN AKTIF</span>
+                    <strong>{{ metrics['active_accounts'] }}<small> / {{ metrics['total_accounts'] }}</small></strong>
+                    <small>akun yang dapat login</small>
+                </article>
+                <article class="monitor-stat-card accent-blue">
+                    <span>P SEDANG AKTIF</span>
+                    <strong>{{ metrics['online_managers'] }}<small> / {{ manager_status|length }}</small></strong>
+                    <small>terlihat dalam 2 menit terakhir</small>
+                </article>
+            </section>
+
+            <section class="monitor-panel-grid" id="plants">
+                <article class="monitor-panel">
+                    <div class="monitor-panel-heading">
+                        <div>
+                            <span class="monitor-kicker">01 / KOMPOSISI</span>
+                            <h2>Persentase kategori tanaman</h2>
+                        </div>
+                        <span class="monitor-muted">berdasarkan jumlah unit</span>
+                    </div>
+                    {% if plant_types %}
+                        <div class="monitor-bars">
+                            {% for item in plant_types %}
+                                <div class="monitor-bar-row">
+                                    <div class="monitor-bar-label">
+                                        <strong>{{ item['name'] }}</strong>
+                                        <span>{{ item['plant_units'] }} unit · {{ item['percentage'] }}%</span>
+                                    </div>
+                                    <div class="monitor-bar-track">
+                                        <span style="width: {{ item['percentage'] }}%"></span>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="monitor-empty">Belum ada data kategori tanaman.</p>
+                    {% endif %}
+                </article>
+
+                <article class="monitor-panel">
+                    <div class="monitor-panel-heading">
+                        <div>
+                            <span class="monitor-kicker">02 / KONDISI</span>
+                            <h2>Status inventaris</h2>
+                        </div>
+                    </div>
+                    <div class="monitor-status-list">
+                        {% for item in status_rows %}
+                            <div class="monitor-status-row">
+                                <span class="monitor-status-dot status-{{ loop.index0 % 4 }}"></span>
+                                <strong>{{ item['status'] }}</strong>
+                                <span>{{ item['plant_units'] }} unit</span>
+                                <small>{{ item['percentage'] }}%</small>
+                            </div>
+                        {% else %}
+                            <p class="monitor-empty">Belum ada data status tanaman.</p>
+                        {% endfor %}
+                    </div>
+                    <div class="monitor-key-facts">
+                        <div><span>HIDUP</span><strong>{{ summary['living_units'] }}</strong></div>
+                        <div><span>PERAWATAN</span><strong>{{ summary['care_units'] }}</strong></div>
+                        <div><span>LAYU</span><strong>{{ summary['wilted_units'] }}</strong></div>
+                        <div><span>MATI</span><strong>{{ summary['dead_units'] }}</strong></div>
+                    </div>
+                </article>
+            </section>
+
+            <section class="monitor-panel monitor-presence-panel">
+                <div class="monitor-panel-heading">
+                    <div>
+                        <span class="monitor-kicker">03 / PENANGGUNG JAWAB</span>
+                        <h2>Status login pengelola P</h2>
+                    </div>
+                    <span class="monitor-muted">Aktif = ada aktivitas dalam 2 menit terakhir</span>
+                </div>
+                <div class="monitor-presence-grid">
+                    {% for manager in manager_status %}
+                        <article class="monitor-presence-card">
+                            <div class="monitor-presence-top">
+                                <strong>{{ manager['code'] }}</strong>
+                                {% if manager['user_id'] and not manager['is_active'] %}
+                                    <span class="monitor-pill disabled">NONAKTIF</span>
+                                {% elif manager['is_online'] %}
+                                    <span class="monitor-pill online">AKTIF</span>
+                                {% else %}
+                                    <span class="monitor-pill offline">OFFLINE</span>
+                                {% endif %}
+                            </div>
+                            <div class="monitor-presence-name">
+                                {{ manager['full_name'] or 'Akun belum dibuat' }}
+                            </div>
+                            <small>{{ manager['username'] or manager['manager_name'] }}</small>
+                            <small class="monitor-last-seen">
+                                Terakhir terlihat: {{ manager['last_seen_at'] or 'Belum pernah login' }}
+                            </small>
+                        </article>
+                    {% else %}
+                        <p class="monitor-empty">Belum ada penanggung jawab P yang terdaftar.</p>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <section class="monitor-panel monitor-accounts-panel" id="accounts">
+                <div class="monitor-panel-heading">
+                    <div>
+                        <span class="monitor-kicker">04 / ACCESS CONTROL</span>
+                        <h2>Akun &amp; hak akses</h2>
+                    </div>
+                    <span class="monitor-muted">{{ metrics['total_accounts'] }} akun terdaftar</span>
+                </div>
+
+                <div class="monitor-create-account">
+                    <h3>Buat akun baru</h3>
+                    <form method="POST" action="{{ url_for('admin.create_account') }}" class="monitor-account-form">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                        <label>Username
+                            <input name="username" required minlength="2" maxlength="50" autocomplete="off" placeholder="Contoh: P2">
+                        </label>
+                        <label>Nama lengkap
+                            <input name="full_name" required maxlength="120" placeholder="Nama pengelola">
+                        </label>
+                        <label>Kata sandi awal
+                            <input type="password" name="password" required minlength="8" autocomplete="new-password">
+                        </label>
+                        <label>Role
+                            <select name="role" id="newAccountRole">
+                                <option value="admin">Admin</option>
+                                <option value="p_manager">Penanggung Jawab (P)</option>
+                                <option value="guru">Guru</option>
+                            </select>
+                        </label>
+                        <label id="newManagerField" hidden>Kode P
+                            <select name="manager_code" id="newManagerCode">
+                                <option value="">Pilih kode P</option>
+                                {% for manager in managers %}
+                                    <option value="{{ manager['code'] }}">{{ manager['code'] }} — {{ manager['name'] }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <p class="monitor-permission-options">P, Guru, dan Admin dapat mengedit data tanaman. Admin juga dapat mengelola semua akun dan menu monitor.</p>
+                        <button type="submit" class="monitor-button">BUAT AKUN <span>↗</span></button>
+                    </form>
+                </div>
+
+                <div class="monitor-table-wrap">
+                    <table class="monitor-account-table">
+                        <thead>
+                            <tr>
+                                <th>Akun</th>
+                                <th>Role / kode P</th>
+                                <th>Login terakhir</th>
+                                <th>Hak akses</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for account in accounts %}
+                                <tr>
+                                    <td>
+                                        <form id="account-form-{{ account['id'] }}" method="POST" action="{{ url_for('admin.update_account', user_id=account['id']) }}">
+                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                                        </form>
+                                        <input class="monitor-account-input" name="full_name" form="account-form-{{ account['id'] }}" value="{{ account['full_name'] }}" required maxlength="120" aria-label="Nama lengkap">
+                                        <input class="monitor-account-input username" name="username" form="account-form-{{ account['id'] }}" value="{{ account['username'] }}" required minlength="2" maxlength="50" pattern="[A-Za-z0-9_.-]+" aria-label="Username">
+                                        <a class="monitor-account-action" href="{{ url_for('admin.reset_account_password', user_id=account['id']) }}">Ganti password</a>
+                                    </td>
+                                    <td>
+                                        <select name="role" form="account-form-{{ account['id'] }}" id="role-{{ account['id'] }}" onchange="toggleManagerField(this, 'manager-field-{{ account['id'] }}')">
+                                            <option value="admin" {% if account['is_admin'] or account['is_superadmin'] %}selected{% endif %}>Admin</option>
+                                            <option value="p_manager" {% if not account['is_admin'] and not account['is_superadmin'] and account['role'] == 'p_manager' %}selected{% endif %}>P</option>
+                                            <option value="guru" {% if not account['is_admin'] and not account['is_superadmin'] and account['role'] == 'guru' %}selected{% endif %}>Guru</option>
+                                        </select>
+                                        <select name="manager_code" form="account-form-{{ account['id'] }}" id="manager-field-{{ account['id'] }}">
+                                            <option value="">—</option>
+                                            {% for manager in managers %}
+                                                <option value="{{ manager['code'] }}" {% if account['manager_code'] == manager['code'] %}selected{% endif %}>
+                                                    {{ manager['code'] }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                        {% if account['is_admin'] or account['is_superadmin'] %}
+                                            <small>{{ 'P ' ~ account['manager_code'] if account['role'] == 'p_manager' else 'Hak tanaman + monitor' }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if account['last_seen_at'] %}
+                                            {{ account['last_seen_at'] }}
+                                        {% else %}
+                                            <span class="monitor-muted">Belum pernah</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="monitor-pill {{ 'online' if account['is_admin'] or account['is_superadmin'] else 'offline' }}">
+                                            {{ 'ADMIN · MONITOR' if account['is_admin'] or account['is_superadmin'] else 'EDIT TANAMAN' }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <label class="monitor-table-check">
+                                            <input type="checkbox" name="is_active" value="1" form="account-form-{{ account['id'] }}" {% if account['is_active'] %}checked{% endif %}>
+                                            {% if not account['is_active'] %}
+                                                Nonaktif
+                                            {% elif account['is_online'] %}
+                                                Online
+                                            {% else %}
+                                                Aktif
+                                            {% endif %}
+                                        </label>
+                                    </td>
+                                    <td>
+                                        <button class="monitor-save-button" type="submit" form="account-form-{{ account['id'] }}">Simpan</button>
+                                        <form method="POST" action="{{ url_for('admin.delete_account', user_id=account['id']) }}" onsubmit="return confirm('Hapus akun {{ account['username'] }}?');">
+                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                                            <button class="monitor-delete-button" type="submit">Hapus</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr><td colspan="6" class="monitor-empty">Belum ada akun.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            <footer class="monitor-footer">ADIWIYATA INVENTORY SYSTEM <span>•</span> ADMIN MONITOR</footer>
+        </main>
+    </div>
+
+    <script>
+        function toggleManagerField(roleSelect, fieldId) {
+            const managerField = document.getElementById(fieldId);
+            const isPManager = roleSelect.value === "p_manager";
+            managerField.hidden = !isPManager;
+            managerField.required = isPManager;
+        }
+
+        const newRole = document.getElementById("newAccountRole");
+        const newManager = document.getElementById("newManagerCode");
+        function updateNewManagerField() {
+            const managerField = document.getElementById("newManagerField");
+            const isPManager = newRole.value === "p_manager";
+            managerField.hidden = !isPManager;
+            newManager.required = isPManager;
+        }
+        newRole.addEventListener("change", updateNewManagerField);
+        updateNewManagerField();
+        document.querySelectorAll('select[id^="role-"]').forEach((roleSelect) => {
+            toggleManagerField(roleSelect, `manager-field-${roleSelect.id.slice(5)}`);
+        });
+    </script>
+    <script src="{{ url_for('static', filename='presence.js') }}" data-presence-url="{{ url_for('auth.presence') }}" defer></script>
+</body>
+</html>

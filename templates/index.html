@@ -24,11 +24,20 @@
                 <div class="library-title-badge">Arsip Inventaris Adiwiyata</div>
                 <div class="library-auth-actions">
                     {% if g.user %}
-                        <span class="user-badge">{{ g.user['full_name'] }} ({{ g.user['manager_code'] or 'Guru' }})</span>
+                        <span class="user-badge">{{ g.user['full_name'] }} (
+                            {% if g.user['is_admin'] or g.user['is_superadmin'] %}Admin
+                            {% elif g.user['role'] == 'p_manager' %}P {{ g.user['manager_code'] }}
+                            {% else %}Guru{% endif %}
+                        )</span>
+                        {% if g.user['is_admin'] or g.user['is_superadmin'] %}
+                            <a href="{{ url_for('admin.dashboard') }}" class="action-link-btn">Admin / Monitor</a>
+                        {% endif %}
+                        <a href="{{ url_for('auth.change_password') }}" class="action-link-btn">Ganti Password</a>
                         <a href="{{ url_for('plants.add_plant') }}" class="action-link-btn primary">+ Tambah Tanaman</a>
                         <a href="{{ url_for('auth.logout') }}" class="action-link-btn">Keluar</a>
                     {% else %}
                         <a href="{{ url_for('auth.login') }}" class="action-link-btn">Login Guru / P</a>
+                        <a href="{{ url_for('admin.admin_login') }}" class="action-link-btn monitor-login-link">Login Monitor</a>
                     {% endif %}
                 </div>
             </div>
@@ -165,7 +174,7 @@
                     <div class="bookshelf">
                         <div class="books">
                             {% for tanaman in daftar_tanaman %}
-                            <a href="{{ url_for('plants.detail', uid=tanaman['uid']) }}" class="book" onclick="bukaBukuAnimasi(event, this)">
+                            <a href="{{ url_for('plants.detail', uid=tanaman['uid']) }}" class="book" onmouseenter="positionBookCover(this)" onmouseleave="resetBookCover(this)" onclick="bukaBukuAnimasi(event, this)">
 
                                 <!-- Efek cahaya grimoire -->
                                 <div class="magic-glow"></div>
@@ -194,6 +203,9 @@
         </div>
     </div>
 
+    {% if g.user %}
+    <script src="{{ url_for('static', filename='presence.js') }}" data-presence-url="{{ url_for('auth.presence') }}" defer></script>
+    {% endif %}
     <script>
         function bukaPintu() {
             const treeScene = document.getElementById('tree-scene');
@@ -345,6 +357,31 @@
             if (noMatchNotice) {
                 noMatchNotice.style.display = (isSearching && totalVisibleGroups === 0) ? 'block' : 'none';
             }
+        }
+
+        function positionBookCover(book) {
+            const cover = book.querySelector('.book-cover-full');
+            const books = book.closest('.books');
+            if (!cover || !books) return;
+
+            const containerRect = books.getBoundingClientRect();
+            const bookRect = book.getBoundingClientRect();
+            const coverWidth = cover.offsetWidth;
+            const inset = 8;
+            const minLeft = containerRect.left + inset;
+            const maxLeft = Math.max(minLeft, containerRect.right - coverWidth - inset);
+            const desiredLeft = bookRect.left + (bookRect.width - coverWidth) / 2;
+            const visibleLeft = Math.min(Math.max(desiredLeft, minLeft), maxLeft);
+
+            cover.style.left = `${visibleLeft - bookRect.left}px`;
+            cover.style.right = 'auto';
+        }
+
+        function resetBookCover(book) {
+            const cover = book.querySelector('.book-cover-full');
+            if (!cover) return;
+            cover.style.left = '';
+            cover.style.right = '';
         }
 
         function bukaBukuAnimasi(event, element) {
