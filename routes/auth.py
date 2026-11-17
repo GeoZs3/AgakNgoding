@@ -8,7 +8,7 @@ auth_bp = Blueprint("auth", __name__)
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if g.get("user") is not None:
-        return redirect(url_for("plants.add_plant"))
+        return redirect(url_for("main.inventory"))
 
     if request.method == "POST":
         username = request.form.get("username", "")
@@ -22,7 +22,7 @@ def login():
             session.clear()
             session["user_id"] = user["id"]
             flash(f"Selamat datang, {user['full_name']}.", "success")
-            return redirect(url_for("plants.add_plant"))
+            return redirect(url_for("main.inventory"))
 
     return render_template("login.html")
 
@@ -31,4 +31,4 @@ def login():
 def logout():
     session.clear()
     flash("Anda telah keluar dari sesi pengurus.", "success")
-    return redirect(url_for("main.index", masuk=1))
+    return redirect(url_for("main.home"))

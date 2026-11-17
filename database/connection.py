@@ -26,15 +26,16 @@ def close_db(e=None) -> None:
 def run_safe_migrations(conn: sqlite3.Connection) -> None:
     """
     Migrasi non-destruktif untuk database SQLite yang sudah ada maupun database baru:
-    - Jika tabel plant_taxonomy sudah ada (DB lama), pastikan kolom verification_status dan indeksnya tersedia.
-    - Jika database baru, schema.sql akan membuat plant_taxonomy beserta kolom dan indeksnya.
+    - Menambahkan verification_status pada plant_taxonomy jika belum ada.
+    - Menambahkan kolom ensiklopedia & penanda migrasi individual pada plants jika belum ada.
+    - Memastikan tabel ai_taxonomy_tasks tersedia.
     """
-    cols = {
+    tx_cols = {
         row["name"]
         for row in conn.execute("PRAGMA table_info(plant_taxonomy)").fetchall()
     }
-    if cols:
-        if "verification_status" not in cols:
+    if tx_cols:
+        if "verification_status" not in tx_cols:
             conn.execute(
                 """
                 ALTER TABLE plant_taxonomy
@@ -48,10 +49,25 @@ def run_safe_migrations(conn: sqlite3.Connection) -> None:
             """
         )
 
-    plants_exists = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='plants'"
-    ).fetchone()
-    if plants_exists:
+    plant_cols = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(plants)").fetchall()
+    }
+    if plant_cols:
+        alter_statements = []
+        if "description" not in plant_cols:
+            alter_statements.append("ALTER TABLE plants ADD COLUMN description TEXT")
+        if "characteristics" not in plant_cols:
+            alter_statements.append("ALTER TABLE plants ADD COLUMN characteristics TEXT")
+        if "ecological_benefits" not in plant_cols:
+            alter_statements.append("ALTER TABLE plants ADD COLUMN ecological_benefits TEXT")
+        if "needs_individual_split" not in plant_cols:
+            alter_statements.append(
+                "ALTER TABLE plants ADD COLUMN needs_individual_split INTEGER NOT NULL DEFAULT 0"
+            )
+        for stmt in alter_statements:
+            conn.execute(stmt)
+
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS ai_taxonomy_tasks (
@@ -88,9 +104,7 @@ def init_db(app) -> None:
     conn.execute("PRAGMA foreign_keys = ON;")
     try:
         with conn:
-            # 1. Jalankan migrasi kolom/tabel baru terlebih dahulu untuk DB lama
             run_safe_migrations(conn)
-            # 2. Jalankan schema.sql (aman untuk DB baru maupun DB lama)
             if schema_path.exists():
                 conn.executescript(schema_path.read_text(encoding="utf-8"))
     finally:

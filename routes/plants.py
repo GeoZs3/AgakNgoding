@@ -52,16 +52,9 @@ EXT_TO_ALLOWED_FORMATS = {
 
 
 def validate_and_read_uploaded_photo(photo_file) -> tuple[bytes, str]:
-    """
-    Memvalidasi file foto berdasarkan:
-    1. Keberadaan file & ekstensi awal.
-    2. Batas ukuran file aktual (MAX_PHOTO_SIZE_BYTES).
-    3. Konten biner gambar aktual menggunakan Pillow (bukan sekadar ekstensi/MIME header).
-    4. Kesesuaian format biner asli (JPEG/PNG/WEBP) dengan ekstensi yang diizinkan.
-    Mengembalikan tuple (raw_bytes, safe_normalized_extension).
-    """
+    """Memvalidasi keberadaan, batas ukuran, dan struktur biner foto via Pillow."""
     if not photo_file or not photo_file.filename:
-        raise ValueError("Foto tanaman wajib diunggah sebelum menyimpan data.")
+        raise ValueError("Foto utama tanaman wajib dipilih atau diambil dari kamera sebelum menyimpan.")
 
     safe_original = secure_filename(photo_file.filename)
     if "." not in safe_original:
@@ -80,7 +73,6 @@ def validate_and_read_uploaded_photo(photo_file) -> tuple[bytes, str]:
         max_mb = max_size / (1024 * 1024)
         raise ValueError(f"Ukuran file foto melebihi batas maksimum {max_mb:.1f} MB.")
 
-    # Verifikasi struktur biner gambar menggunakan Pillow
     try:
         with Image.open(io.BytesIO(raw_bytes)) as img_verify:
             detected_format = (img_verify.format or "").upper()
@@ -90,7 +82,7 @@ def validate_and_read_uploaded_photo(photo_file) -> tuple[bytes, str]:
 
     allowed_formats = current_app.config.get("ALLOWED_IMAGE_FORMATS", {"JPEG", "PNG", "WEBP"})
     if detected_format not in allowed_formats:
-        raise ValueError(f"Format gambar '{detected_format or 'tidak dikenal'}' tidak didukung. Gunakan JPEG, PNG, atau WEBP.")
+        raise ValueError(f"Format gambar '{detected_format or 'tidak dikenal'}' tidak didukung.")
 
     expected_formats = EXT_TO_ALLOWED_FORMATS.get(raw_ext, set())
     if detected_format not in expected_formats:
@@ -101,17 +93,10 @@ def validate_and_read_uploaded_photo(photo_file) -> tuple[bytes, str]:
 
 
 def _safe_delete_photo_file(db, upload_folder: Path, photo_filename: str) -> bool:
-    """
-    Menghapus file foto secara aman dari disk:
-    - Memastikan path berada di dalam upload_folder (anti path traversal).
-    - Memastikan tidak ada entri tanaman lain di DB yang masih memakai file ini.
-    - Menangani kegagalan penghapusan file tanpa melempar exception.
-    """
     if not photo_filename:
         return True
 
     if is_photo_referenced_by_any_plant(db, photo_filename):
-        logger.info("File foto '%s' tidak dihapus karena masih digunakan entri lain.", photo_filename)
         return True
 
     base_dir = upload_folder.resolve()
@@ -140,20 +125,126 @@ def _get_lan_ip() -> str:
 
 @plants_bp.route("/<string:uid>")
 def detail(uid: str):
+    """Halaman detail dua tingkat (Informasi Utama vs Ensiklopedia) untuk pengunjung."""
     db = get_db()
     plant = get_plant_by_uid(db, uid)
     if plant is None:
         abort(404)
 
     show_qr_modal = request.args.get("show_qr") == "1"
-    metadata = get_form_cascading_metadata(db) if g.get("user") else None
 
     return render_template(
         "detail.html",
         plant=plant,
         show_qr_modal=show_qr_modal,
-        metadata=metadata,
     )
+
+
+@plants_bp.route("/<string:uid>/kelola", methods=["GET", "POST"])
+@editor_required
+def manage_plant(uid: str):
+    """Halaman pengeditan data & informasi ensiklopedia khusus pengurus terautentikasi."""
+    db = get_db()
+    plant = get_plant_by_uid(db, uid)
+    if plant is None:
+        abort(404)
+
+    metadata = get_form_cascading_metadata(db)
+
+    if request.method == "POST":
+        status = request.form.get("status", "Hidup").strip()
+        plant_type_name = request.form.get("plant_type_name", "").strip()
+        plant_type_code = request.form.get("plant_type_code", "").strip()
+        sector_name = request.form.get("sector_name", "").strip()
+        sector_code = request.form.get("sector_code", "").strip()
+        subsector_name = request.form.get("subsector_name", "").strip()
+        subsector_code = request.form.get("subsector_code", "").strip()
+        description = request.form.get("description", "").strip()
+        characteristics = request.form.get("characteristics", "").strip()
+        ecological_benefits = request.form.get("ecological_benefits", "").strip()
+        notes = request.form.get("notes", "").strip()
+
+        if status not in ("Hidup", "Perawatan Khusus", "Layu", "Mati"):
+            status = "Hidup"
+
+        if not plant_type_name or not sector_name or not subsector_name:
+            flash("Jenis tanaman, sektor, dan subsektor wajib diisi.", "error")
+            return render_template("manage_plant.html", plant=plant, metadata=metadata), 400
+
+        try:
+            update_plant_with_references(
+                db=db,
+                uid=uid,
+                status=status,
+                plant_type_name=plant_type_name,
+                plant_type_code=plant_type_code,
+                sector_name=sector_name,
+                sector_code=sector_code,
+                subsector_name=subsector_name,
+                subsector_code=subsector_code,
+                description=description,
+                characteristics=characteristics,
+                ecological_benefits=ecological_benefits,
+                notes=notes,
+            )
+            flash("Perubahan data tanaman berhasil disimpan.", "success")
+            return redirect(url_for("plants.detail", uid=uid))
+        except Exception as exc:
+            flash(f"Gagal memperbarui data: {exc}", "error")
+            return render_template("manage_plant.html", plant=plant, metadata=metadata), 400
+
+    return render_template("manage_plant.html", plant=plant, metadata=metadata)
+
+
+@plants_bp.route("/<string:uid>/edit", methods=["POST"])
+@editor_required
+def edit_plant(uid: str):
+    """Endpoint kompatibilitas pembaruan cepat untuk pengurus terautentikasi."""
+    db = get_db()
+    plant = get_plant_by_uid(db, uid)
+    if plant is None:
+        abort(404)
+
+    status = request.form.get("status", "Hidup").strip()
+    plant_type_name = request.form.get("plant_type_name", "").strip()
+    plant_type_code = request.form.get("plant_type_code", "").strip()
+    sector_name = request.form.get("sector_name", "").strip()
+    sector_code = request.form.get("sector_code", "").strip()
+    subsector_name = request.form.get("subsector_name", "").strip()
+    subsector_code = request.form.get("subsector_code", "").strip()
+    description = request.form.get("description", "").strip()
+    characteristics = request.form.get("characteristics", "").strip()
+    ecological_benefits = request.form.get("ecological_benefits", "").strip()
+    notes = request.form.get("notes", "").strip()
+
+    if status not in ("Hidup", "Perawatan Khusus", "Layu", "Mati"):
+        status = "Hidup"
+
+    if not plant_type_name or not sector_name or not subsector_name:
+        flash("Jenis tanaman, sektor, dan subsektor wajib diisi.", "error")
+        return redirect(url_for("plants.manage_plant", uid=uid))
+
+    try:
+        update_plant_with_references(
+            db=db,
+            uid=uid,
+            status=status,
+            plant_type_name=plant_type_name,
+            plant_type_code=plant_type_code,
+            sector_name=sector_name,
+            sector_code=sector_code,
+            subsector_name=subsector_name,
+            subsector_code=subsector_code,
+            description=description,
+            characteristics=characteristics,
+            ecological_benefits=ecological_benefits,
+            notes=notes,
+        )
+        flash("Perubahan data tanaman berhasil disimpan.", "success")
+    except Exception as exc:
+        flash(f"Gagal memperbarui data: {exc}", "error")
+
+    return redirect(url_for("plants.detail", uid=uid))
 
 
 @plants_bp.route("/<string:uid>/qr.png")
@@ -180,55 +271,9 @@ def dynamic_qr(uid: str):
     )
 
 
-@plants_bp.route("/<string:uid>/edit", methods=["POST"])
-@editor_required
-def edit_plant(uid: str):
-    """Memperbarui status (termasuk Mati), jenis tanaman, lokasi lintas sektor, dan catatan."""
-    db = get_db()
-    plant = get_plant_by_uid(db, uid)
-    if plant is None:
-        abort(404)
-
-    status = request.form.get("status", "Hidup").strip()
-    plant_type_name = request.form.get("plant_type_name", "").strip()
-    plant_type_code = request.form.get("plant_type_code", "").strip()
-    sector_name = request.form.get("sector_name", "").strip()
-    sector_code = request.form.get("sector_code", "").strip()
-    subsector_name = request.form.get("subsector_name", "").strip()
-    subsector_code = request.form.get("subsector_code", "").strip()
-    notes = request.form.get("notes", "").strip()
-
-    if status not in ("Hidup", "Perawatan Khusus", "Layu", "Mati"):
-        status = "Hidup"
-
-    if not plant_type_name or not sector_name or not subsector_name:
-        flash("Jenis tanaman, sektor, dan subsektor wajib diisi.", "error")
-        return redirect(url_for("plants.detail", uid=uid))
-
-    try:
-        update_plant_with_references(
-            db=db,
-            uid=uid,
-            status=status,
-            plant_type_name=plant_type_name,
-            plant_type_code=plant_type_code,
-            sector_name=sector_name,
-            sector_code=sector_code,
-            subsector_name=subsector_name,
-            subsector_code=subsector_code,
-            notes=notes,
-        )
-        flash("Perubahan data tanaman berhasil disimpan.", "success")
-    except Exception as exc:
-        flash(f"Gagal memperbarui data: {exc}", "error")
-
-    return redirect(url_for("plants.detail", uid=uid))
-
-
 @plants_bp.route("/<string:uid>/taksonomi/verifikasi", methods=["POST"])
 @editor_required
 def verify_taxonomy_route(uid: str):
-    """Memverifikasi atau menolak hasil taksonomi AI pada entri tanaman."""
     db = get_db()
     plant = get_plant_by_uid(db, uid)
     if plant is None:
@@ -241,13 +286,12 @@ def verify_taxonomy_route(uid: str):
     except Exception as exc:
         flash(f"Gagal memperbarui verifikasi taksonomi: {exc}", "error")
 
-    return redirect(url_for("plants.detail", uid=uid))
+    return redirect(url_for("plants.manage_plant", uid=uid))
 
 
 @plants_bp.route("/<string:uid>/taksonomi/retry", methods=["POST"])
 @editor_required
 def retry_taxonomy_ai(uid: str):
-    """Menjalankan ulang proses identifikasi taksonomi AI yang gagal."""
     db = get_db()
     plant = get_plant_by_uid(db, uid)
     if plant is None:
@@ -266,25 +310,19 @@ def retry_taxonomy_ai(uid: str):
     else:
         flash("Tugas AI sedang diproses atau tidak dalam status gagal.", "error")
 
-    return redirect(url_for("plants.detail", uid=uid))
+    return redirect(url_for("plants.manage_plant", uid=uid))
 
 
 @plants_bp.route("/<string:uid>/hapus", methods=["POST"])
 @editor_required
 def delete_plant(uid: str):
-    """
-    Menghapus entri tanaman dengan urutan aman:
-    1. Hapus record database dalam transaksi terlebih dahulu.
-    2. Jika database berhasil dihapus, hapus file foto dari disk (jika tidak dipakai entri lain).
-    3. Jika penghapusan file gagal, catat ke log dan tetap arahkan ke beranda dengan peringatan.
-    """
     db = get_db()
     try:
         result = delete_plant_entry(db, uid)
     except Exception as exc:
         logger.error("Gagal menghapus record tanaman '%s' dari database: %s", uid, exc)
         flash("Gagal menghapus data tanaman dari database. File foto tetap dipertahankan.", "error")
-        return redirect(url_for("plants.detail", uid=uid))
+        return redirect(url_for("main.inventory"))
 
     if not result["deleted"]:
         abort(404)
@@ -298,10 +336,10 @@ def delete_plant(uid: str):
                 "Entri tanaman berhasil dihapus dari database, namun file foto lama gagal dibersihkan dari penyimpanan.",
                 "warning",
             )
-            return redirect(url_for("main.index", masuk=1))
+            return redirect(url_for("main.inventory"))
 
-    flash("Entri tanaman berhasil dihapus dari arsip.", "success")
-    return redirect(url_for("main.index", masuk=1))
+    flash("Entri individu tanaman berhasil dihapus dari inventaris.", "success")
+    return redirect(url_for("main.inventory"))
 
 
 @plants_bp.route("/tambah", methods=["GET", "POST"])
@@ -320,9 +358,11 @@ def add_plant():
         subsector_code = request.form.get("subsector_code", "").strip()
         manager_code = request.form.get("manager_code", "").strip()
         status = request.form.get("status", "Hidup").strip()
+        description = request.form.get("description", "").strip()
+        characteristics = request.form.get("characteristics", "").strip()
+        ecological_benefits = request.form.get("ecological_benefits", "").strip()
         notes = request.form.get("notes", "").strip()
 
-        # Aturan desain #3: Tanaman baru tidak boleh dibuat dengan status Mati
         if status == "Mati":
             flash("Tanaman baru tidak boleh dibuat dengan status Mati.", "error")
             return render_template("add_plant.html", metadata=metadata), 400
@@ -334,7 +374,6 @@ def add_plant():
             flash("Nama tanaman, jenis tanaman, sektor, subsektor, dan penanggung jawab (P) wajib diisi.", "error")
             return render_template("add_plant.html", metadata=metadata), 400
 
-        # Validasi konten biner & ukuran foto sebelum menulis ke disk
         try:
             raw_photo_bytes, safe_ext = validate_and_read_uploaded_photo(request.files.get("photo"))
         except ValueError as val_err:
@@ -363,6 +402,9 @@ def add_plant():
                 subsector_code=subsector_code,
                 manager_code=manager_code,
                 photo_filename=photo_filename,
+                description=description,
+                characteristics=characteristics,
+                ecological_benefits=ecological_benefits,
                 notes=notes,
                 created_by_user_id=g.user["id"] if g.get("user") else None,
                 enqueue_ai_task=True,
@@ -383,7 +425,6 @@ def add_plant():
             flash(f"Gagal menyimpan data tanaman: {err}", "error")
             return render_template("add_plant.html", metadata=metadata), 400
         finally:
-            # Hapus foto yang baru diunggah hanya jika transaksi database belum commit dan tidak dipakai entri lain
             if not db_committed and save_path.exists():
                 if not is_photo_referenced_by_any_plant(db, photo_filename):
                     try:

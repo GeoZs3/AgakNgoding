@@ -22,6 +22,8 @@ function makeAutoCode(text, maxLen = 4) {
 }
 
 function attachSearchableCombo({ inputEl, dropdownEl, getItems, onSelect, onNewEntry }) {
+    if (!inputEl || !dropdownEl) return;
+
     function renderOptions() {
         const query = inputEl.value.trim();
         const qLower = query.toLowerCase();
@@ -92,7 +94,7 @@ function attachSearchableCombo({ inputEl, dropdownEl, getItems, onSelect, onNewE
     });
 }
 
-// 1. Combobox Nama Tanaman (otomatis mengisi jenis tanaman jika sudah ada di arsip)
+// 1. Combobox Nama Tanaman
 attachSearchableCombo({
     inputEl: document.getElementById('plantNameInput'),
     dropdownEl: document.getElementById('dropdownPlantName'),
@@ -188,3 +190,193 @@ function updatePublicIdPreview() {
 }
 
 updatePublicIdPreview();
+
+// =========================================================================
+// 5. DIALOG SUMBER FOTO: DARI FILE ATAU DARI KAMERA (getUserMedia + Canvas)
+// =========================================================================
+(function initPhotoCaptureModal() {
+    const photoInput = document.getElementById('photoInput');
+    const modal = document.getElementById('photoSourceModal');
+    const openBtn = document.getElementById('openPhotoDialogBtn');
+    const changeBtn = document.getElementById('changePhotoBtn');
+    const closeBtn = document.getElementById('closePhotoDialogBtn');
+    const fromFileBtn = document.getElementById('chooseFromFileBtn');
+    const fromCamBtn = document.getElementById('chooseFromCameraBtn');
+    const cameraBox = document.getElementById('cameraStreamBox');
+    const videoEl = document.getElementById('cameraVideoPreview');
+    const canvasEl = document.getElementById('cameraCaptureCanvas');
+    const captureBtn = document.getElementById('captureFrameBtn');
+    const cancelCamBtn = document.getElementById('cancelCameraBtn');
+    const errorBox = document.getElementById('cameraErrorMsg');
+
+    const emptyPrompt = document.getElementById('photoEmptyPrompt');
+    const previewWrapper = document.getElementById('photoPreviewWrapper');
+    const previewImg = document.getElementById('photoPreviewImg');
+    const formEl = document.getElementById('addPlantForm');
+
+    let activeMediaStream = null;
+    const MAX_FILE_BYTES = 5 * 1024 * 1024;
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+    function stopCameraStream() {
+        if (activeMediaStream) {
+            activeMediaStream.getTracks().forEach(track => track.stop());
+            activeMediaStream = null;
+        }
+        if (videoEl) {
+            videoEl.srcObject = null;
+        }
+        if (cameraBox) {
+            cameraBox.classList.remove('active');
+        }
+    }
+
+    function showCameraError(message) {
+        if (!errorBox) return;
+        errorBox.textContent = message;
+        errorBox.style.display = 'block';
+    }
+
+    function clearCameraError() {
+        if (!errorBox) return;
+        errorBox.textContent = '';
+        errorBox.style.display = 'none';
+    }
+
+    function openModal() {
+        clearCameraError();
+        stopCameraStream();
+        if (modal) modal.classList.add('open');
+    }
+
+    function closeModal() {
+        stopCameraStream();
+        clearCameraError();
+        if (modal) modal.classList.remove('open');
+    }
+
+    function applySelectedFileToPreview(file) {
+        if (!file) return false;
+        if (!ALLOWED_TYPES.includes(file.type)) {
+            showCameraError('Format file tidak didukung. Gunakan PNG, JPG, atau WEBP.');
+            return false;
+        }
+        if (file.size > MAX_FILE_BYTES) {
+            showCameraError('Ukuran file foto melebihi batas 5 MB.');
+            return false;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            previewImg.src = ev.target.result;
+            emptyPrompt.style.display = 'none';
+            previewWrapper.classList.add('active');
+            closeModal();
+        };
+        reader.readAsDataURL(file);
+        return true;
+    }
+
+    if (openBtn) openBtn.addEventListener('click', openModal);
+    if (changeBtn) changeBtn.addEventListener('click', openModal);
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+    }
+
+    // Pilihan 1: Dari File
+    if (fromFileBtn && photoInput) {
+        fromFileBtn.addEventListener('click', () => {
+            clearCameraError();
+            stopCameraStream();
+            photoInput.click();
+        });
+
+        photoInput.addEventListener('change', () => {
+            if (photoInput.files && photoInput.files[0]) {
+                const ok = applySelectedFileToPreview(photoInput.files[0]);
+                if (!ok) {
+                    photoInput.value = '';
+                }
+            }
+        });
+    }
+
+    // Pilihan 2: Dari Kamera
+    if (fromCamBtn) {
+        fromCamBtn.addEventListener('click', async () => {
+            clearCameraError();
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showCameraError('Browser atau konteks koneksi ini tidak mendukung API kamera. Gunakan HTTPS/localhost atau pilih "Dari File".');
+                return;
+            }
+
+            try {
+                activeMediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' } },
+                    audio: false
+                });
+                videoEl.srcObject = activeMediaStream;
+                cameraBox.classList.add('active');
+            } catch (err) {
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    showCameraError('Izin akses kamera ditolak oleh pengguna. Izinkan kamera di pengaturan browser atau pilih "Dari File".');
+                } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                    showCameraError('Perangkat kamera tidak ditemukan. Silakan pilih foto "Dari File".');
+                } else {
+                    showCameraError(`Kamera tidak dapat diakses (${err.message || err.name}).`);
+                }
+            }
+        });
+    }
+
+    // Tangkap frame video ke Canvas -> File input
+    if (captureBtn) {
+        captureBtn.addEventListener('click', () => {
+            if (!videoEl || !videoEl.videoWidth || !videoEl.videoHeight) {
+                showCameraError('Kamera belum siap mengambil gambar.');
+                return;
+            }
+
+            canvasEl.width = videoEl.videoWidth;
+            canvasEl.height = videoEl.videoHeight;
+            const ctx = canvasEl.getContext('2d');
+            ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
+
+            canvasEl.toBlob((blob) => {
+                if (!blob) {
+                    showCameraError('Gagal memproses hasil tangkapan kamera.');
+                    return;
+                }
+                const capturedFile = new File([blob], `camera_${Date.now()}.jpg`, {
+                    type: 'image/jpeg'
+                });
+                const dt = new DataTransfer();
+                dt.items.add(capturedFile);
+                photoInput.files = dt.files;
+
+                applySelectedFileToPreview(capturedFile);
+            }, 'image/jpeg', 0.9);
+        });
+    }
+
+    if (cancelCamBtn) {
+        cancelCamBtn.addEventListener('click', () => {
+            stopCameraStream();
+            clearCameraError();
+        });
+    }
+
+    // Pastikan foto wajib ada sebelum submit form
+    if (formEl) {
+        formEl.addEventListener('submit', (e) => {
+            if (!photoInput.files || photoInput.files.length === 0) {
+                e.preventDefault();
+                openModal();
+                showCameraError('Foto utama tanaman wajib dipilih atau diambil dari kamera sebelum menyimpan.');
+            }
+        });
+    }
+})();

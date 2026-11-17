@@ -31,11 +31,66 @@
             </button>
 
             <nav class="nav-menu" id="navMenu" aria-label="Navigasi utama">
-                <a href="#hero" class="nav-link">Beranda</a>
-                <a href="#tentang" class="nav-link">Tentang</a>
-                <a href="#dampak" class="nav-link">Dampak</a>
-                <a href="#aksi-hijau" class="nav-link">Aksi Hijau</a>
-                <a href="{{ url_for('main.index') }}" class="nav-link nav-catalog-link">Cari Tanaman</a>
+                <a href="#hero" class="nav-link">
+                    <span class="nav-hover-icon" aria-hidden="true">
+                        <!-- Ikon Tunas / Beranda -->
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 22v-9"/>
+                            <path d="M12 13c0-4.5 3.5-8 8-8 0 4.5-3.5 8-8 8Z"/>
+                            <path d="M12 16c0-3.8-2.8-6.8-6.5-6.8 0 3.8 2.8 6.8 6.5 6.8Z"/>
+                        </svg>
+                    </span>
+                    <span class="nav-link-text">Beranda</span>
+                </a>
+
+                <a href="#tentang" class="nav-link">
+                    <span class="nav-hover-icon" aria-hidden="true">
+                        <!-- Ikon Daun / Tentang -->
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/>
+                            <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
+                        </svg>
+                    </span>
+                    <span class="nav-link-text">Tentang</span>
+                </a>
+
+                <a href="#dampak" class="nav-link">
+                    <span class="nav-hover-icon" aria-hidden="true">
+                        <!-- Ikon Pertumbuhan / Dampak -->
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 20h18"/>
+                            <path d="M7 20v-6"/>
+                            <path d="M12 20V9"/>
+                            <path d="M17 20V5"/>
+                            <path d="M17 5c-2.5 0-4.5 1.8-4.5 4"/>
+                        </svg>
+                    </span>
+                    <span class="nav-link-text">Dampak</span>
+                </a>
+
+                <a href="#aksi-hijau" class="nav-link">
+                    <span class="nav-hover-icon" aria-hidden="true">
+                        <!-- Ikon Pohon / Aksi Hijau -->
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 22v-6"/>
+                            <path d="M12 3 5 12h4l-3 5h12l-3-5h4L12 3Z"/>
+                        </svg>
+                    </span>
+                    <span class="nav-link-text">Aksi Hijau</span>
+                </a>
+
+                <a href="{{ url_for('main.index') }}" class="nav-link nav-catalog-link">
+                    <span class="nav-hover-icon" aria-hidden="true">
+                        <!-- Ikon Kaca Pembesar Botani / Cari Tanaman -->
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="7"/>
+                            <path d="m20 20-3.5-3.5"/>
+                            <path d="M11 8v6"/>
+                            <path d="M8 11h6"/>
+                        </svg>
+                    </span>
+                    <span class="nav-link-text">Cari Tanaman</span>
+                </a>
 
                 <div class="nav-auth-slot">
                     {% if g.user %}

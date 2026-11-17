@@ -3,8 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tambah Data Tanaman - Proyek Adiwiyata</title>
+    <title>Catat Individu Tanaman — Proyek Adiwiyata</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .photo-picker-box {
+            border: 1.5px dashed #8D6E63;
+            border-radius: 8px;
+            padding: 14px;
+            background: rgba(255, 255, 255, 0.65);
+            text-align: center;
+        }
+        .photo-preview-wrapper {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        .photo-preview-wrapper.active {
+            display: flex;
+        }
+        .photo-preview-wrapper img {
+            width: 100%;
+            max-width: 260px;
+            aspect-ratio: 4 / 3;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 2px solid #2e7d32;
+        }
+        .camera-stream-box {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .camera-stream-box.active {
+            display: flex;
+        }
+        .camera-stream-box video {
+            width: 100%;
+            max-width: 340px;
+            aspect-ratio: 4 / 3;
+            background: #111;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+        .photo-choice-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
+        .camera-error-msg {
+            display: none;
+            margin-top: 10px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: #ffcdd2;
+            color: #b71c1c;
+            font-size: 13px;
+        }
+    </style>
 </head>
 <body>
 
@@ -12,31 +72,30 @@
         <div class="parchment-paper form-parchment">
             <div class="parchment-header">
                 <div class="parchment-title-area">
-                    <h1>Catat Tanaman Baru</h1>
+                    <h1>Catat Individu Tanaman Baru</h1>
                     {% if g.user %}
                         <p>Petugas Login: <strong>{{ g.user['full_name'] }} ({{ g.user['manager_code'] or 'Guru' }})</strong></p>
                     {% endif %}
                 </div>
-                <a href="{{ url_for('main.index', masuk=1) }}" class="btn-back" style="margin-top: 0;">&#8592; Batal &amp; Kembali</a>
+                <a href="{{ url_for('main.inventory') }}" class="btn-back" style="margin-top: 0;">&#8592; Batal &amp; Kembali</a>
             </div>
 
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
-                        <div class="flash-alert flash-{{ category }}">{{ message }}</div>
+                        <div class="flash-banner {{ category }}">{{ message }}</div>
                     {% endfor %}
                 {% endif %}
             {% endwith %}
 
-            <!-- PRATINJAU REAL-TIME ID PUBLIK: SEKTOR-SUB-IDSUBSEKTOR-TIPETANAMAN-P -->
-            <div class="id-preview-box">
-                <span class="id-preview-label">Pratinjau ID Tanaman:</span>
+            <div class="id-preview-box" style="margin-bottom: 18px;">
+                <span class="preview-label">Pratinjau ID Individu Tanaman (1 Entri = 1 Individu):</span>
                 <code id="publicIdPreview">SEKTOR-SUB-001-TIPE-{{ g.user['manager_code'] or 'P' }}</code>
             </div>
 
             <form method="POST" action="{{ url_for('plants.add_plant') }}" enctype="multipart/form-data" class="adiwiyata-form" id="addPlantForm">
                 <div class="form-grid-2">
-                    <!-- 1. SEARCHABLE COMBOBOX: NAMA TANAMAN -->
+                    <!-- 1. NAMA TANAMAN -->
                     <div class="form-group">
                         <label for="plantNameInput">Nama Tanaman * (Cari atau Buat Baru)</label>
                         <div class="searchable-combo" id="comboPlantName">
@@ -46,13 +105,13 @@
                                 name="name"
                                 autocomplete="off"
                                 required
-                                placeholder="Ketik nama tanaman (taksonomi diproses otomatis di balik layar)..."
+                                placeholder="Ketik nama umum tanaman..."
                             >
                             <div class="combo-dropdown" id="dropdownPlantName"></div>
                         </div>
                     </div>
 
-                    <!-- 2. SEARCHABLE COMBOBOX: JENIS TANAMAN -->
+                    <!-- 2. JENIS TANAMAN -->
                     <div class="form-group">
                         <label for="plantTypeInput">Jenis Tanaman (Fungsional) * (Cari atau Buat Baru)</label>
                         <div class="searchable-combo" id="comboPlantType">
@@ -62,7 +121,7 @@
                                 name="plant_type_name"
                                 autocomplete="off"
                                 required
-                                placeholder="Contoh: Tanaman Hias, Tanaman Obat..."
+                                placeholder="Contoh: Tanaman Hias, Peneduh, Obat, Buah..."
                             >
                             <input type="hidden" id="plantTypeCodeInput" name="plant_type_code">
                             <div class="combo-dropdown" id="dropdownPlantType"></div>
@@ -71,7 +130,7 @@
 
                     <!-- 3. STATUS KONDISI (DEFAULT: HIDUP, TANPA OPSI MATI) -->
                     <div class="form-group">
-                        <label for="statusSelect">Status Kondisi *</label>
+                        <label for="statusSelect">Status Kondisi Individu *</label>
                         <select id="statusSelect" name="status" required>
                             <option value="Hidup" selected>Hidup</option>
                             <option value="Perawatan Khusus">Perawatan Khusus</option>
@@ -79,16 +138,40 @@
                         </select>
                     </div>
 
-                    <!-- 4. FOTO WAJIB -->
+                    <!-- 4. FOTO UTAMA WAJIB (SATU TOMBOL -> DIALOG FILE / KAMERA) -->
                     <div class="form-group">
-                        <label for="photoInput">Foto Tanaman * (Wajib Diunggah)</label>
-                        <input type="file" id="photoInput" name="photo" accept=".png,.jpg,.jpeg,.webp" required>
+                        <label>Foto Utama Individu * (Wajib)</label>
+                        <input
+                            type="file"
+                            id="photoInput"
+                            name="photo"
+                            accept="image/png,image/jpeg,image/webp"
+                            style="display: none;"
+                        >
+
+                        <div class="photo-picker-box">
+                            <div id="photoEmptyPrompt">
+                                <p style="font-size: 13px; color: #5D4037; margin-bottom: 8px;">
+                                    Belum ada foto dipilih (PNG, JPG, WEBP maks. 5 MB).
+                                </p>
+                                <button type="button" class="btn-qr-small" id="openPhotoDialogBtn">
+                                    + Tambah Foto
+                                </button>
+                            </div>
+
+                            <div class="photo-preview-wrapper" id="photoPreviewWrapper">
+                                <img id="photoPreviewImg" src="" alt="Pratinjau foto tanaman">
+                                <div style="display: flex; gap: 8px;">
+                                    <button type="button" class="btn-qr-small" id="changePhotoBtn">Ganti Foto</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- 5. LOKASI (SEARCHABLE SEKTOR -> SEARCHABLE SUBSEKTOR) & P DAPAT DIMODIFIKASI -->
-                <fieldset class="form-fieldset">
-                    <legend>Lokasi Penanaman &amp; Penanggung Jawab (P)</legend>
+                <!-- 5. LOKASI & PENANGGUNG JAWAB -->
+                <div class="form-section" style="margin-top: 16px;">
+                    <h3>Lokasi Penanaman &amp; Penanggung Jawab (P)</h3>
                     <div class="form-grid-3">
                         <div class="form-group">
                             <label for="sectorInput">Sektor Sekolah * (Cari / Buat Baru)</label>
@@ -115,7 +198,7 @@
                                     name="subsector_name"
                                     autocomplete="off"
                                     required
-                                    placeholder="Contoh: Gedung baru - dekat toilet..."
+                                    placeholder="Contoh: AA1, Halaman Depan..."
                                 >
                                 <input type="hidden" id="subsectorCodeInput" name="subsector_code">
                                 <div class="combo-dropdown" id="dropdownSubsector"></div>
@@ -141,15 +224,63 @@
                             </select>
                         </div>
                     </div>
-                </fieldset>
-
-                <div class="form-group">
-                    <label for="notesInput">Catatan Tambahan (Opsional)</label>
-                    <input type="text" id="notesInput" name="notes" placeholder="Keterangan kondisi media tanam / perawatan...">
                 </div>
 
-                <button type="submit" class="btn-submit-parchment">Simpan &amp; Buat Kode QR</button>
+                <!-- 6. INFORMASI ENSIKLOPEDIA & CATATAN (OPSIONAL) -->
+                <details class="higher-taxonomy-details" style="margin-bottom: 16px;">
+                    <summary>Isi Informasi Ensiklopedia &amp; Catatan Tambahan (Opsional)</summary>
+                    <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+                        <div class="form-group">
+                            <label for="descriptionInput">Deskripsi Tanaman</label>
+                            <textarea id="descriptionInput" name="description" rows="2" placeholder="Deskripsi singkat tanaman..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="characteristicsInput">Karakteristik</label>
+                            <textarea id="characteristicsInput" name="characteristics" rows="2" placeholder="Ciri morfologi daun/batang/bunga..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="ecologicalInput">Manfaat Ekologis</label>
+                            <textarea id="ecologicalInput" name="ecological_benefits" rows="2" placeholder="Manfaat bagi lingkungan sekolah..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="notesInput">Catatan Perawatan</label>
+                            <input type="text" id="notesInput" name="notes" placeholder="Keterangan kondisi media tanam / perawatan...">
+                        </div>
+                    </div>
+                </details>
+
+                <button type="submit" class="btn-submit-parchment">Simpan Individu &amp; Buat Kode QR</button>
             </form>
+        </div>
+    </div>
+
+    <!-- DIALOG PILIHAN SUMBER FOTO (DARI FILE ATAU DARI KAMERA) -->
+    <div class="qr-modal-backdrop" id="photoSourceModal">
+        <div class="qr-modal-card" style="max-width: 440px;">
+            <button type="button" class="qr-modal-close" id="closePhotoDialogBtn" aria-label="Tutup">&times;</button>
+            <h3>Pilih Sumber Foto Tanaman</h3>
+            <p style="font-size: 13px; color: #5D4037;">Foto baru akan disimpan setelah formulir dikonfirmasi.</p>
+
+            <div class="photo-choice-buttons" id="photoSourceChoices">
+                <button type="button" class="btn-submit-parchment" id="chooseFromFileBtn">
+                    Dari File
+                </button>
+                <button type="button" class="btn-qr-small" style="padding: 10px 18px; font-size: 14px;" id="chooseFromCameraBtn">
+                    Dari Kamera
+                </button>
+            </div>
+
+            <div class="camera-error-msg" id="cameraErrorMsg"></div>
+
+            <!-- AREA STREAM KAMERA LIVE + CANVAS CAPTURE -->
+            <div class="camera-stream-box" id="cameraStreamBox">
+                <video id="cameraVideoPreview" autoplay playsinline muted></video>
+                <canvas id="cameraCaptureCanvas" style="display: none;"></canvas>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" class="btn-submit-parchment" id="captureFrameBtn">Ambil Foto</button>
+                    <button type="button" class="btn-back" style="margin-top: 0;" id="cancelCameraBtn">Batal Kamera</button>
+                </div>
+            </div>
         </div>
     </div>
 

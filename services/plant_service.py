@@ -22,7 +22,6 @@ def _generate_short_code(label: str, max_len: int = 5) -> str:
 
 
 def get_or_create_sector(db: sqlite3.Connection, sector_name: str, sector_code: str = "") -> int:
-    """Mencari sektor berdasarkan nama (case-insensitive); jika belum ada, buat entri baru (tanpa memulai transaksi sendiri)."""
     clean_name = sector_name.strip()
     existing = db.execute(
         "SELECT id FROM sectors WHERE LOWER(name) = LOWER(?)", (clean_name,)
@@ -46,7 +45,6 @@ def get_or_create_sector(db: sqlite3.Connection, sector_name: str, sector_code: 
 def get_or_create_subsector(
     db: sqlite3.Connection, sector_id: int, subsector_name: str, subsector_code: str = ""
 ) -> int:
-    """Mencari subsektor dalam sektor terkait; jika belum ada, buat entri baru (tanpa memulai transaksi sendiri)."""
     clean_name = subsector_name.strip()
     existing = db.execute(
         "SELECT id FROM subsectors WHERE sector_id = ? AND LOWER(name) = LOWER(?)",
@@ -74,7 +72,6 @@ def get_or_create_subsector(
 def get_or_create_plant_type(
     db: sqlite3.Connection, type_name: str, type_code: str = ""
 ) -> int:
-    """Mencari jenis tanaman berdasarkan nama; jika belum ada, buat entri baru (tanpa memulai transaksi sendiri)."""
     clean_name = type_name.strip()
     existing = db.execute(
         "SELECT id FROM plant_types WHERE LOWER(name) = LOWER(?)", (clean_name,)
@@ -96,7 +93,6 @@ def get_or_create_plant_type(
 
 
 def get_next_subsector_sequence(db: sqlite3.Connection, subsector_id: int) -> int:
-    """Menghitung nomor urut tanaman berikutnya (IDSUBSEKTOR) di dalam suatu subsektor."""
     row = db.execute(
         "SELECT COALESCE(MAX(subsector_seq), 0) + 1 AS next_seq FROM plants WHERE subsector_id = ?",
         (subsector_id,),
@@ -111,7 +107,6 @@ def build_public_plant_id(
     plant_type_code: str,
     manager_code: str,
 ) -> str:
-    """Menyusun ID publik tanaman sesuai format: SEKTOR-SUB-IDSUBSEKTOR-TIPETANAMAN-P."""
     seq_formatted = f"{subsector_seq:03d}"
     return (
         f"{sector_code.upper()}-"
@@ -133,10 +128,13 @@ def _insert_plant_record(
     taxonomy_data: Dict[str, str],
     photo_filename: Optional[str] = None,
     notes: Optional[str] = None,
+    description: Optional[str] = None,
+    characteristics: Optional[str] = None,
+    ecological_benefits: Optional[str] = None,
     created_by_user_id: Optional[int] = None,
     taxonomy_status: str = "verified",
 ) -> Dict[str, str]:
-    """Helper internal penulisan record tanaman tanpa membuka transaksi bersarang."""
+    """Helper internal penulisan 1 individu tanaman (quantity selalu dikunci ke 1)."""
     loc_row = db.execute(
         """
         SELECT s.id AS sector_id, s.code AS sector_code, sub.code AS subsector_code
@@ -173,7 +171,6 @@ def _insert_plant_record(
     kingdom = (taxonomy_data.get("kingdom") or "Plantae").strip() or "Plantae"
 
     if any([family, genus, species, scientific_name, division, class_name, order_name]):
-        # Hanya gunakan ulang record taksonomi yang sudah terverifikasi (jangan timpa record bersama)
         if scientific_name and taxonomy_status == "verified":
             existing_tx = db.execute(
                 """
@@ -217,27 +214,33 @@ def _insert_plant_record(
         manager_code=mgr_row["code"],
     )
 
+    individual_quantity = 1
+
     db.execute(
         """
         INSERT INTO plants (
             uid, plant_code, subsector_seq, name, quantity, status,
             plant_type_id, taxonomy_id, subsector_id, manager_code,
-            photo_filename, notes, created_by_user_id
+            photo_filename, description, characteristics, ecological_benefits,
+            notes, created_by_user_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             uid,
             plant_code,
             subsector_seq,
             name.strip(),
-            quantity,
+            individual_quantity,
             status.strip(),
             plant_type_id,
             taxonomy_id,
             subsector_id,
             mgr_row["code"],
             photo_filename,
+            (description or "").strip() or None,
+            (characteristics or "").strip() or None,
+            (ecological_benefits or "").strip() or None,
             (notes or "").strip() or None,
             created_by_user_id,
         ),
@@ -260,14 +263,16 @@ def create_plant_with_references(
     manager_code: str,
     photo_filename: Optional[str] = None,
     notes: Optional[str] = None,
+    description: Optional[str] = None,
+    characteristics: Optional[str] = None,
+    ecological_benefits: Optional[str] = None,
     created_by_user_id: Optional[int] = None,
     enqueue_ai_task: bool = True,
     max_ai_attempts: int = 3,
 ) -> Dict[str, str]:
     """
-    Menjalankan pembuatan referensi (plant_type, sector, subsector), entri tanaman,
+    Menjalankan pembuatan referensi, entri 1 individu tanaman,
     dan tugas antrean taksonomi AI dalam SATU transaksi SQLite atomik tunggal.
-    Jika salah satu tahap gagal, seluruh perubahan database di-rollback.
     """
     with db:
         plant_type_id = get_or_create_plant_type(db, plant_type_name, plant_type_code)
@@ -277,7 +282,7 @@ def create_plant_with_references(
         created = _insert_plant_record(
             db=db,
             name=name,
-            quantity=quantity,
+            quantity=1,
             status=status,
             plant_type_id=plant_type_id,
             subsector_id=subsector_id,
@@ -285,6 +290,9 @@ def create_plant_with_references(
             taxonomy_data={},
             photo_filename=photo_filename,
             notes=notes,
+            description=description,
+            characteristics=characteristics,
+            ecological_benefits=ecological_benefits,
             created_by_user_id=created_by_user_id,
         )
 
@@ -311,14 +319,16 @@ def create_plant_entry(
     taxonomy_data: Dict[str, str],
     photo_filename: Optional[str] = None,
     notes: Optional[str] = None,
+    description: Optional[str] = None,
+    characteristics: Optional[str] = None,
+    ecological_benefits: Optional[str] = None,
     created_by_user_id: Optional[int] = None,
 ) -> Dict[str, str]:
-    """Kompatibilitas pemanggilan langsung pembuatan entri tanaman dalam satu transaksi."""
     with db:
         return _insert_plant_record(
             db=db,
             name=name,
-            quantity=quantity,
+            quantity=1,
             status=status,
             plant_type_id=plant_type_id,
             subsector_id=subsector_id,
@@ -326,12 +336,14 @@ def create_plant_entry(
             taxonomy_data=taxonomy_data,
             photo_filename=photo_filename,
             notes=notes,
+            description=description,
+            characteristics=characteristics,
+            ecological_benefits=ecological_benefits,
             created_by_user_id=created_by_user_id,
         )
 
 
 def is_photo_referenced_by_any_plant(db: sqlite3.Connection, photo_filename: str) -> bool:
-    """Memeriksa apakah file foto masih direferensikan oleh entri tanaman mana pun."""
     if not photo_filename:
         return False
     row = db.execute(
@@ -341,77 +353,252 @@ def is_photo_referenced_by_any_plant(db: sqlite3.Connection, photo_filename: str
     return row is not None
 
 
-def get_filter_tag_groups(db: sqlite3.Connection) -> Dict[str, List[Dict[str, str]]]:
-    """Mengambil daftar tags terstruktur dari atribut database untuk filter 3-state."""
-    groups: Dict[str, List[Dict[str, str]]] = {
-        "Status Hidup": [],
-        "Lokasi (Sektor)": [],
-        "Jenis Tanaman": [],
-        "Taksonomi (Famili)": [],
-        "Taksonomi (Genus)": [],
+def get_catalog_filter_options(db: sqlite3.Connection) -> Dict[str, Any]:
+    """
+    Mengambil opsi filter independen untuk katalog pengunjung.
+    Hanya menampilkan sektor, subsektor, dan jenis tanaman yang memiliki minimal 1 entri (plant_count > 0).
+    """
+    sectors = [
+        dict(r)
+        for r in db.execute(
+            """
+            SELECT s.id, s.code, s.name, COUNT(p.uid) AS plant_count
+            FROM sectors s
+            INNER JOIN subsectors sub ON sub.sector_id = s.id
+            INNER JOIN plants p ON p.subsector_id = sub.id
+            GROUP BY s.id, s.code, s.name
+            HAVING COUNT(p.uid) > 0
+            ORDER BY s.name ASC
+            """
+        )
+    ]
+
+    subsectors = [
+        dict(r)
+        for r in db.execute(
+            """
+            SELECT sub.id, sub.sector_id, sub.code, sub.name, s.code AS sector_code, s.name AS sector_name, COUNT(p.uid) AS plant_count
+            FROM subsectors sub
+            INNER JOIN sectors s ON sub.sector_id = s.id
+            INNER JOIN plants p ON p.subsector_id = sub.id
+            GROUP BY sub.id, sub.sector_id, sub.code, sub.name, s.code, s.name
+            HAVING COUNT(p.uid) > 0
+            ORDER BY s.name ASC, sub.name ASC
+            """
+        )
+    ]
+
+    plant_types = [
+        dict(r)
+        for r in db.execute(
+            """
+            SELECT pt.id, pt.code, pt.name, COUNT(p.uid) AS plant_count
+            FROM plant_types pt
+            INNER JOIN plants p ON p.plant_type_id = pt.id
+            GROUP BY pt.id, pt.code, pt.name
+            HAVING COUNT(p.uid) > 0
+            ORDER BY pt.name ASC
+            """
+        )
+    ]
+
+    families = [
+        r["family"]
+        for r in db.execute(
+            """
+            SELECT DISTINCT tx.family
+            FROM plant_taxonomy tx
+            INNER JOIN plants p ON p.taxonomy_id = tx.id
+            WHERE tx.family IS NOT NULL AND tx.family != ''
+            ORDER BY tx.family ASC
+            """
+        )
+    ]
+
+    statuses = ["Hidup", "Perawatan Khusus", "Layu", "Mati"]
+
+    return {
+        "sectors": sectors,
+        "subsectors": subsectors,
+        "plant_types": plant_types,
+        "statuses": statuses,
+        "families": families,
     }
 
-    status_set = {"Hidup", "Perawatan Khusus", "Layu", "Mati"}
-    for r in db.execute("SELECT DISTINCT status FROM plants WHERE status IS NOT NULL AND status != ''"):
-        status_set.add(r["status"])
-    for st in sorted(status_set):
-        groups["Status Hidup"].append({"key": f"status:{st}", "label": st})
 
-    for r in db.execute("SELECT code, name FROM sectors ORDER BY name ASC"):
-        groups["Lokasi (Sektor)"].append({
-            "key": f"sector:{r['code']}",
-            "label": f"{r['name']} ({r['code']})",
-        })
+def search_catalog_plants(
+    db: sqlite3.Connection,
+    search_query: str = "",
+    sector_code: str = "",
+    subsector_id: str = "",
+    type_code: str = "",
+    status: str = "",
+    family: str = "",
+    sort_by: str = "name_asc",
+    legacy_inc: Optional[List[str]] = None,
+    legacy_exc: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    Kueri katalog hybrid pengunjung dengan:
+    - Regular search (nama umum, nama ilmiah, kode tanaman, UID)
+    - Advanced filter independen (sektor, subsektor, jenis tanaman, status, famili)
+    - Sorting berbasis database (name_asc, name_desc, location, newest)
+    - Active filter chips metadata yang dapat dilepas satuan
+    """
+    conditions: List[str] = []
+    params: List[Any] = []
+    active_chips: List[Dict[str, str]] = []
 
-    for r in db.execute("SELECT code, name FROM plant_types ORDER BY name ASC"):
-        groups["Jenis Tanaman"].append({
-            "key": f"type:{r['code']}",
-            "label": f"{r['name']} ({r['code']})",
-        })
+    q = search_query.strip()
+    if q:
+        conditions.append(
+            "(p.name LIKE ? OR tx.scientific_name LIKE ? OR p.plant_code LIKE ? OR p.uid LIKE ?)"
+        )
+        like_q = f"%{q}%"
+        params.extend([like_q, like_q, like_q, like_q])
+        active_chips.append({"param": "q", "label": f"Cari: \"{q}\""})
 
-    for r in db.execute(
-        "SELECT DISTINCT family FROM plant_taxonomy WHERE family IS NOT NULL AND family != '' ORDER BY family ASC"
-    ):
-        groups["Taksonomi (Famili)"].append({
-            "key": f"family:{r['family']}",
-            "label": r["family"],
-        })
+    sec = sector_code.strip()
+    if sec:
+        sec_row = db.execute(
+            "SELECT code, name FROM sectors WHERE LOWER(code) = LOWER(?)", (sec,)
+        ).fetchone()
+        if sec_row:
+            conditions.append("s.code = ?")
+            params.append(sec_row["code"])
+            active_chips.append({"param": "sector", "label": f"Sektor: {sec_row['name']}"})
 
-    for r in db.execute(
-        "SELECT DISTINCT genus FROM plant_taxonomy WHERE genus IS NOT NULL AND genus != '' ORDER BY genus ASC"
-    ):
-        groups["Taksonomi (Genus)"].append({
-            "key": f"genus:{r['genus']}",
-            "label": r["genus"],
-        })
+    sub_str = subsector_id.strip()
+    if sub_str.isdigit():
+        sub_row = db.execute(
+            """
+            SELECT sub.id, sub.name, s.name AS sector_name
+            FROM subsectors sub
+            INNER JOIN sectors s ON sub.sector_id = s.id
+            WHERE sub.id = ?
+            """,
+            (int(sub_str),),
+        ).fetchone()
+        if sub_row:
+            conditions.append("sub.id = ?")
+            params.append(int(sub_row["id"]))
+            active_chips.append({
+                "param": "subsector",
+                "label": f"Lokasi: {sub_row['sector_name']} - {sub_row['name']}",
+            })
 
-    return groups
+    t_code = type_code.strip()
+    if t_code:
+        type_row = db.execute(
+            "SELECT code, name FROM plant_types WHERE LOWER(code) = LOWER(?)", (t_code,)
+        ).fetchone()
+        if type_row:
+            conditions.append("pt.code = ?")
+            params.append(type_row["code"])
+            active_chips.append({"param": "type", "label": f"Jenis: {type_row['name']}"})
+
+    st = status.strip()
+    if st:
+        conditions.append("p.status = ?")
+        params.append(st)
+        active_chips.append({"param": "status", "label": f"Kondisi: {st}"})
+
+    fam = family.strip()
+    if fam:
+        conditions.append("tx.family = ?")
+        params.append(fam)
+        active_chips.append({"param": "family", "label": f"Famili: {fam}"})
+
+    for tag in (legacy_inc or []):
+        if ":" in tag:
+            cat, val = tag.split(":", 1)
+            if cat == "sector" and not sec:
+                conditions.append("s.code = ?")
+                params.append(val)
+                active_chips.append({"param": "sector", "label": f"Sektor: {val}"})
+            elif cat == "type" and not t_code:
+                conditions.append("pt.code = ?")
+                params.append(val)
+                active_chips.append({"param": "type", "label": f"Jenis: {val}"})
+            elif cat == "status" and not st:
+                conditions.append("p.status = ?")
+                params.append(val)
+                active_chips.append({"param": "status", "label": f"Kondisi: {val}"})
+            elif cat == "family" and not fam:
+                conditions.append("tx.family = ?")
+                params.append(val)
+                active_chips.append({"param": "family", "label": f"Famili: {val}"})
+
+    for tag in (legacy_exc or []):
+        if ":" in tag:
+            cat, val = tag.split(":", 1)
+            if cat == "status":
+                conditions.append("(p.status IS NULL OR p.status != ?)")
+                params.append(val)
+            elif cat == "sector":
+                conditions.append("(s.code IS NULL OR s.code != ?)")
+                params.append(val)
+            elif cat == "type":
+                conditions.append("(pt.code IS NULL OR pt.code != ?)")
+                params.append(val)
+
+    sort_map = {
+        "name_asc": "p.name ASC, p.plant_code ASC",
+        "name_desc": "p.name DESC, p.plant_code ASC",
+        "location": "s.name ASC, sub.name ASC, p.subsector_seq ASC",
+        "newest": "p.created_at DESC, p.plant_code DESC",
+    }
+    order_by_sql = sort_map.get(sort_by, sort_map["name_asc"])
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    query = f"""
+        SELECT
+            p.uid,
+            p.plant_code,
+            p.name,
+            p.status,
+            p.photo_filename,
+            p.created_at,
+            pt.code AS plant_type_code,
+            pt.name AS plant_type_name,
+            tx.scientific_name,
+            tx.family,
+            s.code AS sector_code,
+            s.name AS sector_name,
+            sub.name AS subsector_name
+        FROM plants p
+        INNER JOIN plant_types pt ON p.plant_type_id = pt.id
+        INNER JOIN subsectors sub ON p.subsector_id = sub.id
+        INNER JOIN sectors s ON sub.sector_id = s.id
+        LEFT JOIN plant_taxonomy tx ON p.taxonomy_id = tx.id
+        {where_clause}
+        ORDER BY {order_by_sql}
+    """
+    plants = [dict(r) for r in db.execute(query, params).fetchall()]
+
+    return {
+        "plants": plants,
+        "total_count": len(plants),
+        "active_chips": active_chips,
+    }
 
 
-def _build_tag_condition(tag_key: str, is_include: bool, params: List[Any]) -> Optional[str]:
-    if ":" not in tag_key:
-        return None
-    category, value = tag_key.split(":", 1)
-    value = value.strip()
-    if not value:
-        return None
-
-    if category == "status":
-        params.append(value)
-        return "p.status = ?" if is_include else "(p.status IS NULL OR p.status != ?)"
-    if category == "sector":
-        params.append(value)
-        return "s.code = ?" if is_include else "(s.code IS NULL OR s.code != ?)"
-    if category == "type":
-        params.append(value)
-        return "pt.code = ?" if is_include else "(pt.code IS NULL OR pt.code != ?)"
-    if category == "family":
-        params.append(value)
-        return "tx.family = ?" if is_include else "(tx.family IS NULL OR tx.family != ?)"
-    if category == "genus":
-        params.append(value)
-        return "tx.genus = ?" if is_include else "(tx.genus IS NULL OR tx.genus != ?)"
-    return None
+def get_filter_tag_groups(db: sqlite3.Connection) -> Dict[str, List[Dict[str, str]]]:
+    """Dipertahankan untuk kompatibilitas modul lama."""
+    opts = get_catalog_filter_options(db)
+    return {
+        "Status Hidup": [{"key": f"status:{st}", "label": st} for st in opts["statuses"]],
+        "Lokasi (Sektor)": [
+            {"key": f"sector:{s['code']}", "label": f"{s['name']} ({s['code']})"}
+            for s in opts["sectors"]
+        ],
+        "Jenis Tanaman": [
+            {"key": f"type:{t['code']}", "label": f"{t['name']} ({t['code']})"}
+            for t in opts["plant_types"]
+        ],
+        "Taksonomi (Famili)": [{"key": f"family:{f}", "label": f} for f in opts["families"]],
+    }
 
 
 def get_plants_grouped_by_type(
@@ -420,37 +607,51 @@ def get_plants_grouped_by_type(
     include_tags: Optional[List[str]] = None,
     exclude_tags: Optional[List[str]] = None,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    include_tags = include_tags or []
-    exclude_tags = exclude_tags or []
-    search_query = search_query.strip()
+    """Dipertahankan untuk kompatibilitas modul lama."""
+    res = search_catalog_plants(
+        db=db,
+        search_query=search_query,
+        legacy_inc=include_tags,
+        legacy_exc=exclude_tags,
+    )
+    grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for item in res["plants"]:
+        grouped[item["plant_type_name"]].append(item)
+    return dict(grouped)
 
+
+def get_inventory_list_for_managers(
+    db: sqlite3.Connection,
+    search_query: str = "",
+    sector_code: str = "",
+    type_code: str = "",
+    status: str = "",
+    only_needs_split: bool = False,
+) -> List[Dict[str, Any]]:
+    """Mengambil daftar lengkap inventaris individual khusus ruang kerja pengurus."""
     conditions: List[str] = []
     params: List[Any] = []
 
-    if search_query:
-        conditions.append("(p.name LIKE ? OR tx.scientific_name LIKE ? OR p.plant_code LIKE ?)")
-        like_val = f"%{search_query}%"
-        params.extend([like_val, like_val, like_val])
+    q = search_query.strip()
+    if q:
+        conditions.append("(p.name LIKE ? OR p.plant_code LIKE ? OR p.uid LIKE ? OR sub.name LIKE ?)")
+        like_q = f"%{q}%"
+        params.extend([like_q, like_q, like_q, like_q])
 
-    inc_by_cat: Dict[str, List[str]] = defaultdict(list)
-    for t in include_tags:
-        if ":" in t:
-            cat = t.split(":", 1)[0]
-            inc_by_cat[cat].append(t)
+    if sector_code.strip():
+        conditions.append("s.code = ?")
+        params.append(sector_code.strip())
 
-    for _, keys in inc_by_cat.items():
-        or_clauses: List[str] = []
-        for k in keys:
-            clause = _build_tag_condition(k, is_include=True, params=params)
-            if clause:
-                or_clauses.append(clause)
-        if or_clauses:
-            conditions.append(f"({' OR '.join(or_clauses)})")
+    if type_code.strip():
+        conditions.append("pt.code = ?")
+        params.append(type_code.strip())
 
-    for k in exclude_tags:
-        clause = _build_tag_condition(k, is_include=False, params=params)
-        if clause:
-            conditions.append(clause)
+    if status.strip():
+        conditions.append("p.status = ?")
+        params.append(status.strip())
+
+    if only_needs_split:
+        conditions.append("p.needs_individual_split = 1")
 
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -460,27 +661,30 @@ def get_plants_grouped_by_type(
             p.plant_code,
             p.name,
             p.quantity,
+            p.needs_individual_split,
             p.status,
             p.photo_filename,
+            p.created_at,
+            pt.code AS plant_type_code,
             pt.name AS plant_type_name,
-            tx.scientific_name,
+            s.code AS sector_code,
             s.name AS sector_name,
-            sub.name AS subsector_name
+            sub.name AS subsector_name,
+            m.code AS manager_code,
+            m.name AS manager_name,
+            ai.status AS ai_task_status,
+            tx.verification_status AS taxonomy_verification_status
         FROM plants p
         INNER JOIN plant_types pt ON p.plant_type_id = pt.id
         INNER JOIN subsectors sub ON p.subsector_id = sub.id
         INNER JOIN sectors s ON sub.sector_id = s.id
+        INNER JOIN managers m ON p.manager_code = m.code
         LEFT JOIN plant_taxonomy tx ON p.taxonomy_id = tx.id
+        LEFT JOIN ai_taxonomy_tasks ai ON p.uid = ai.plant_uid
         {where_clause}
-        ORDER BY pt.name ASC, p.name ASC
+        ORDER BY p.created_at DESC, p.plant_code ASC
     """
-    rows = db.execute(query, params).fetchall()
-    grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-    for row in rows:
-        item = dict(row)
-        grouped[item["plant_type_name"]].append(item)
-
-    return dict(grouped)
+    return [dict(r) for r in db.execute(query, params).fetchall()]
 
 
 def get_plant_by_uid(db: sqlite3.Connection, uid: str) -> Optional[Dict[str, Any]]:
@@ -491,8 +695,12 @@ def get_plant_by_uid(db: sqlite3.Connection, uid: str) -> Optional[Dict[str, Any
             p.subsector_seq,
             p.name,
             p.quantity,
+            p.needs_individual_split,
             p.status,
             p.photo_filename,
+            p.description,
+            p.characteristics,
+            p.ecological_benefits,
             p.notes,
             p.created_at,
             p.taxonomy_id,
@@ -623,7 +831,6 @@ def update_plant_entry(
     subsector_id: int,
     notes: Optional[str] = None,
 ) -> None:
-    """Memperbarui status, jenis tanaman, lokasi (subsektor), dan catatan."""
     with db:
         current = db.execute(
             """
@@ -717,8 +924,11 @@ def update_plant_with_references(
     subsector_name: str,
     subsector_code: str,
     notes: Optional[str] = None,
+    description: Optional[str] = None,
+    characteristics: Optional[str] = None,
+    ecological_benefits: Optional[str] = None,
 ) -> None:
-    """Memperbarui referensi jenis/lokasi dan data tanaman dalam satu transaksi atomik."""
+    """Memperbarui referensi jenis/lokasi, informasi ensiklopedia, dan data tanaman secara atomik."""
     with db:
         plant_type_id = get_or_create_plant_type(db, plant_type_name, plant_type_code)
         sector_id = get_or_create_sector(db, sector_name, sector_code)
@@ -749,6 +959,11 @@ def update_plant_with_references(
         subsector_changed = int(current["subsector_id"]) != int(subsector_id)
         type_changed = int(current["plant_type_id"]) != int(plant_type_id)
 
+        desc_val = (description or "").strip() or None
+        char_val = (characteristics or "").strip() or None
+        eco_val = (ecological_benefits or "").strip() or None
+        notes_val = (notes or "").strip() or None
+
         if subsector_changed or type_changed:
             new_seq = (
                 get_next_subsector_sequence(db, subsector_id)
@@ -770,6 +985,9 @@ def update_plant_with_references(
                     subsector_id = ?,
                     subsector_seq = ?,
                     plant_code = ?,
+                    description = ?,
+                    characteristics = ?,
+                    ecological_benefits = ?,
                     notes = ?,
                     updated_at = datetime('now', 'localtime')
                 WHERE uid = ?
@@ -780,7 +998,10 @@ def update_plant_with_references(
                     subsector_id,
                     new_seq,
                     new_plant_code,
-                    (notes or "").strip() or None,
+                    desc_val,
+                    char_val,
+                    eco_val,
+                    notes_val,
                     uid,
                 ),
             )
@@ -789,19 +1010,18 @@ def update_plant_with_references(
                 """
                 UPDATE plants
                 SET status = ?,
+                    description = ?,
+                    characteristics = ?,
+                    ecological_benefits = ?,
                     notes = ?,
                     updated_at = datetime('now', 'localtime')
                 WHERE uid = ?
                 """,
-                (status.strip(), (notes or "").strip() or None, uid),
+                (status.strip(), desc_val, char_val, eco_val, notes_val, uid),
             )
 
 
 def delete_plant_entry(db: sqlite3.Connection, uid: str) -> Dict[str, Any]:
-    """
-    Menghapus entri tanaman dari database secara transaksional.
-    Mengembalikan metadata file foto (dan apakah file masih dipakai tanaman lain).
-    """
     with db:
         row = db.execute(
             "SELECT photo_filename, taxonomy_id FROM plants WHERE uid = ?",
@@ -815,7 +1035,6 @@ def delete_plant_entry(db: sqlite3.Connection, uid: str) -> Dict[str, Any]:
 
         db.execute("DELETE FROM plants WHERE uid = ?", (uid,))
 
-        # Bersihkan record taksonomi pending yatim jika tidak dipakai tanaman lain
         if taxonomy_id is not None:
             still_used_tx = db.execute(
                 "SELECT 1 FROM plants WHERE taxonomy_id = ? LIMIT 1",
@@ -840,7 +1059,6 @@ def delete_plant_entry(db: sqlite3.Connection, uid: str) -> Dict[str, Any]:
 
 
 def verify_plant_taxonomy(db: sqlite3.Connection, uid: str, action: str) -> None:
-    """Mengubah status verifikasi taksonomi tanaman (verified / rejected) oleh Guru/P."""
     if action not in ("verified", "rejected"):
         raise ValueError("Status verifikasi tidak valid.")
 
@@ -850,7 +1068,6 @@ def verify_plant_taxonomy(db: sqlite3.Connection, uid: str, action: str) -> None
             raise ValueError("Tanaman belum memiliki data taksonomi.")
 
         tx_id = int(row["taxonomy_id"])
-        # Pastikan jika taksonomi dipakai bersama dan ditolak pada satu tanaman, tidak merusak tanaman lain
         shared_count = db.execute(
             "SELECT COUNT(*) AS cnt FROM plants WHERE taxonomy_id = ?",
             (tx_id,),
@@ -864,33 +1081,36 @@ def verify_plant_taxonomy(db: sqlite3.Connection, uid: str, action: str) -> None
                 (action, tx_id),
             )
 
+
 def get_adiwiyata_impact_stats(db: sqlite3.Connection) -> Dict[str, int]:
     """
-    Mengambil statistik dampak lingkungan secara aktual dari database SQLite.
-    Mengembalikan angka 0 apabila tabel masih kosong (tanpa data rekayasa).
+    Mengambil statistik dampak lingkungan secara aktual menggunakan COUNT(*)
+    (1 baris = 1 individu tanaman).
     """
-    plant_row = db.execute(
+    plant_row = db.execute("SELECT COUNT(*) AS total_plants FROM plants").fetchone()
+    sector_row = db.execute(
         """
-        SELECT
-            COUNT(*) AS total_records,
-            COALESCE(SUM(quantity), 0) AS total_individuals,
-            COUNT(DISTINCT plant_type_id) AS active_plant_types
-        FROM plants
+        SELECT COUNT(DISTINCT s.id) AS total_sectors
+        FROM sectors s
+        INNER JOIN subsectors sub ON sub.sector_id = s.id
+        INNER JOIN plants p ON p.subsector_id = sub.id
+        """
+    ).fetchone()
+    type_row = db.execute(
+        """
+        SELECT COUNT(DISTINCT pt.id) AS total_types
+        FROM plant_types pt
+        INNER JOIN plants p ON p.plant_type_id = pt.id
         """
     ).fetchone()
 
-    sector_row = db.execute("SELECT COUNT(*) AS total_sectors FROM sectors").fetchone()
-    type_row = db.execute("SELECT COUNT(*) AS total_types FROM plant_types").fetchone()
-
-    total_records = int(plant_row["total_records"]) if plant_row else 0
-    total_individuals = int(plant_row["total_individuals"]) if plant_row else 0
+    total_plants = int(plant_row["total_plants"]) if plant_row else 0
     total_sectors = int(sector_row["total_sectors"]) if sector_row else 0
-    # Tampilkan jumlah kategori fungsional yang tersedia/tercatat
     total_categories = int(type_row["total_types"]) if type_row else 0
 
     return {
-        "total_records": total_records,
-        "total_individuals": total_individuals,
+        "total_records": total_plants,
+        "total_individuals": total_plants,
         "total_sectors": total_sectors,
         "total_categories": total_categories,
     }

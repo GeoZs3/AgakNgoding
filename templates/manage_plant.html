@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kelola {{ plant['name'] }} — Ruang Pengurus Adiwiyata</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <div class="parchment-container">
+        <div class="parchment-paper form-parchment">
+            <div class="parchment-header">
+                <div class="parchment-title-area">
+                    <h1>Kelola Individu Tanaman</h1>
+                    <p>Kode ID: <code>{{ plant['plant_code'] }}</code> &bull; UID: <code>{{ plant['uid'] }}</code></p>
+                </div>
+                <a href="{{ url_for('main.inventory') }}" class="btn-back" style="margin-top: 0;">&#8592; Kembali ke Inventaris</a>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="flash-banner {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- VERIFIKASI TAKSONOMI AI -->
+            <div class="form-section">
+                <h3>Status Taksonomi Biologis</h3>
+                {% if plant['family'] or plant['genus'] or plant['species'] or plant['scientific_name'] %}
+                    <p style="margin-bottom: 10px;">
+                        <strong>Nama Ilmiah:</strong> <em>{{ plant['scientific_name'] or '-' }}</em> |
+                        <strong>Famili:</strong> {{ plant['family'] or '-' }} |
+                        <strong>Status Verifikasi:</strong> <code>{{ plant['taxonomy_verification_status'] }}</code>
+                    </p>
+                    {% if plant['taxonomy_verification_status'] == 'pending' %}
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <form method="POST" action="{{ url_for('plants.verify_taxonomy_route', uid=plant['uid']) }}">
+                            <input type="hidden" name="action" value="verified">
+                            <button type="submit" class="btn-qr-small">Verifikasi Taksonomi</button>
+                        </form>
+                        <form method="POST" action="{{ url_for('plants.verify_taxonomy_route', uid=plant['uid']) }}">
+                            <input type="hidden" name="action" value="rejected">
+                            <button type="submit" class="btn-qr-small btn-delete-entry">Tolak Hasil AI</button>
+                        </form>
+                    </div>
+                    {% endif %}
+                {% else %}
+                    <p style="margin-bottom: 8px;">Status AI: <strong>{{ plant['ai_task_status'] or 'belum ada' }}</strong></p>
+                    {% if plant['ai_task_status'] == 'failed' %}
+                    <form method="POST" action="{{ url_for('plants.retry_taxonomy_ai', uid=plant['uid']) }}">
+                        <button type="submit" class="btn-qr-small">Coba Ulang Identifikasi AI</button>
+                    </form>
+                    {% endif %}
+                {% endif %}
+            </div>
+
+            <!-- FORM EDIT LOKASI, STATUS & ENSIKLOPEDIA -->
+            <form method="POST" action="{{ url_for('plants.manage_plant', uid=plant['uid']) }}" class="adiwiyata-form">
+                <div class="form-grid-2">
+                    <div class="form-group">
+                        <label for="statusSelect">Kondisi Tanaman *</label>
+                        <select id="statusSelect" name="status" required>
+                            <option value="Hidup" {% if plant['status'] == 'Hidup' %}selected{% endif %}>Hidup</option>
+                            <option value="Perawatan Khusus" {% if plant['status'] == 'Perawatan Khusus' %}selected{% endif %}>Perawatan Khusus</option>
+                            <option value="Layu" {% if plant['status'] == 'Layu' %}selected{% endif %}>Layu</option>
+                            <option value="Mati" {% if plant['status'] == 'Mati' %}selected{% endif %}>Mati</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="plantTypeName">Jenis Tanaman *</label>
+                        <input type="text" id="plantTypeName" name="plant_type_name" list="ptList" value="{{ plant['plant_type_name'] }}" required>
+                        <input type="hidden" name="plant_type_code" value="{{ plant['plant_type_code'] }}">
+                        <datalist id="ptList">
+                            {% for pt in metadata['plant_types'] %}
+                                <option value="{{ pt['name'] }}">
+                            {% endfor %}
+                        </datalist>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sectorName">Sektor Sekolah *</label>
+                        <input type="text" id="sectorName" name="sector_name" list="secList" value="{{ plant['sector_name'] }}" required>
+                        <input type="hidden" name="sector_code" value="{{ plant['sector_code'] }}">
+                        <datalist id="secList">
+                            {% for sec in metadata['sectors'] %}
+                                <option value="{{ sec['name'] }}">
+                            {% endfor %}
+                        </datalist>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="subsectorName">Subsektor Spesifik *</label>
+                        <input type="text" id="subsectorName" name="subsector_name" list="subList" value="{{ plant['subsector_name'] }}" required>
+                        <input type="hidden" name="subsector_code" value="{{ plant['subsector_code'] }}">
+                        <datalist id="subList">
+                            {% for sub in metadata['subsectors'] %}
+                                <option value="{{ sub['name'] }}">
+                            {% endfor %}
+                        </datalist>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 14px;">
+                    <label for="descInput">Deskripsi Ensiklopedia (Opsional)</label>
+                    <textarea id="descInput" name="description" rows="2" placeholder="Penjelasan umum tanaman...">{{ plant['description'] or '' }}</textarea>
+                </div>
+
+                <div class="form-group" style="margin-top: 12px;">
+                    <label for="charInput">Karakteristik Morfologi (Opsional)</label>
+                    <textarea id="charInput" name="characteristics" rows="2" placeholder="Ciri daun, batang, bunga, atau kebutuhan cahaya...">{{ plant['characteristics'] or '' }}</textarea>
+                </div>
+
+                <div class="form-group" style="margin-top: 12px;">
+                    <label for="ecoInput">Manfaat Ekologis (Opsional)</label>
+                    <textarea id="ecoInput" name="ecological_benefits" rows="2" placeholder="Peran penyerap polutan, peneduh, toga, dsb...">{{ plant['ecological_benefits'] or '' }}</textarea>
+                </div>
+
+                <div class="form-group" style="margin-top: 12px;">
+                    <label for="notesInput">Catatan Perawatan / Tambahan</label>
+                    <input type="text" id="notesInput" name="notes" value="{{ plant['notes'] or '' }}">
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn-submit-parchment">Simpan Perubahan</button>
+                    <a href="{{ url_for('plants.detail', uid=plant['uid']) }}" class="btn-back" style="margin-top: 0;">Lihat Halaman Publik</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</body>
+</html>

@@ -3,380 +3,343 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pohon Pengetahuan - Proyek Adiwiyata</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>Katalog Tanaman — Proyek Adiwiyata</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='catalog.css') }}">
 </head>
 <body>
 
-    <div id="page-transition"></div>
+    <!-- NAVBAR PENGUNJUNG -->
+    <header class="catalog-navbar">
+        <div class="container nav-inner">
+            <a href="{{ url_for('main.home') }}" class="nav-brand">
+                <span aria-hidden="true">&#127807;</span>
+                <span>Adiwiyata</span>
+            </a>
+            <nav class="nav-links">
+                <a href="{{ url_for('main.home') }}">Beranda</a>
+                <a href="{{ url_for('main.index') }}" class="active">Katalog Tanaman</a>
+                {% if g.user %}
+                    <a href="{{ url_for('main.inventory') }}" class="btn-nav-manager">Ruang Inventaris</a>
+                {% else %}
+                    <a href="{{ url_for('auth.login') }}" class="btn-nav-outline">Login Pengurus</a>
+                {% endif %}
+            </nav>
+        </div>
+    </header>
 
-    {% if not skip_intro %}
-    <div id="tree-scene">
-        <div class="door" onclick="bukaPintu()">Masuk</div>
-    </div>
-    {% endif %}
-
-    <div id="bookshelf-scene">
-        <div class="library-room">
-
-            <!-- BARIS NAVIGASI PENGURUS (GURU & P) -->
-            <!-- BARIS NAVIGASI PENGURUS & TAUTAN BERANDA -->
-            <div class="library-top-bar">
-                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <a href="{{ url_for('main.home') }}" class="action-link-btn">&larr; Beranda Adiwiyata</a>
-                    <div class="library-title-badge">Katalog Inventaris Tanaman</div>
-                </div>
-                <div class="library-auth-actions">
-                    {% if g.user %}
-                        <span class="user-badge">{{ g.user['full_name'] }} ({{ g.user['manager_code'] or 'Guru' }})</span>
-                        <a href="{{ url_for('plants.add_plant') }}" class="action-link-btn primary">+ Tambah Tanaman</a>
-                        <a href="{{ url_for('auth.logout') }}" class="action-link-btn">Keluar</a>
-                    {% else %}
-                        <a href="{{ url_for('auth.login') }}" class="action-link-btn">Login Guru / P</a>
-                    {% endif %}
-                </div>
+    <main class="container catalog-main">
+        <!-- HEADER KATALOG -->
+        <section class="catalog-hero-bar">
+            <div>
+                <span class="eyebrow">Ensiklopedia &amp; Koleksi Flora Sekolah</span>
+                <h1>Katalog Tanaman Sekolah</h1>
+                <p>Jelajahi individu tanaman berdasarkan kategori fungsional, lokasi sektor, atau nama ilmiah.</p>
             </div>
+            <div class="catalog-counter-pill">
+                Menampilkan <strong>{{ total_count }}</strong> individu tanaman
+            </div>
+        </section>
 
-            <!-- SEARCH BAR + DROPDOWN FILTER TAGS 3-STATE -->
-            <div class="manga-search-wrapper">
-                <form method="GET" action="{{ url_for('main.index') }}" id="searchTagForm">
-                    <input type="hidden" name="masuk" value="1">
-                    <div id="hiddenTagInputs">
-                        {% for inc in include_tags %}
-                            <input type="hidden" name="inc" value="{{ inc }}">
-                        {% endfor %}
-                        {% for exc in exclude_tags %}
-                            <input type="hidden" name="exc" value="{{ exc }}">
-                        {% endfor %}
-                    </div>
+        <!-- RAK NAVIGASI INDEPENDEN: JENIS TANAMAN (FUNGSI) & SEKTOR (LOKASI) -->
+        {% set active_types = filter_options['plant_types'] | selectattr('plant_count', 'gt', 0) | list %}
+        {% set active_sectors = filter_options['sectors'] | selectattr('plant_count', 'gt', 0) | list %}
 
-                    <div class="search-controls-row">
-                        <input
-                            type="text"
-                            name="q"
-                            value="{{ search_query }}"
-                            placeholder="Cari nama tanaman, nama ilmiah, atau ID..."
-                            class="manga-search-input"
+        {% if active_types or active_sectors %}
+        <section class="shelf-nav-panel" aria-label="Navigasi rak kategori dan lokasi">
+            {% if active_types %}
+            <div class="shelf-row">
+                <span class="shelf-row-label">Rak Jenis Tanaman:</span>
+                <div class="shelf-pills">
+                    <button
+                        type="button"
+                        class="shelf-pill {% if not selected_type %}active{% endif %}"
+                        onclick="applyQuickFilter('type', '')"
+                    >
+                        Semua Jenis
+                    </button>
+                    {% for pt in active_types %}
+                        <button
+                            type="button"
+                            class="shelf-pill {% if selected_type == pt['code'] %}active{% endif %}"
+                            onclick="applyQuickFilter('type', '{{ pt['code'] }}')"
                         >
-
-                        <button type="button" class="manga-dropdown-toggle" id="toggleTagsBtn" onclick="toggleTagsDropdown()">
-                            <span>Filter Tags</span>
-                            <span class="count-inc" id="incCountBadge" style="{% if not include_tags %}display:none;{% endif %}">+{{ include_tags|length }}</span>
-                            <span class="count-exc" id="excCountBadge" style="{% if not exclude_tags %}display:none;{% endif %}">-{{ exclude_tags|length }}</span>
-                            <span class="chevron">&#9662;</span>
+                            {{ pt['name'] }} <small>({{ pt['plant_count'] }})</small>
                         </button>
-
-                        <button type="submit" class="manga-search-btn">Search</button>
-
-                        {% if search_query or include_tags or exclude_tags %}
-                            <a href="{{ url_for('main.index', masuk=1) }}" class="manga-reset-btn">Reset</a>
-                        {% endif %}
-                    </div>
-
-                    <!-- DROPDOWN PANEL TAGS -->
-                    <div class="manga-tags-dropdown" id="tagsDropdownPanel">
-                        <div class="tags-search-bar-row">
-                            <div class="tag-quick-input-box">
-                                <input
-                                    type="text"
-                                    id="tagQuickFilter"
-                                    placeholder="Cari tag (status, sektor, jenis, famili, genus)..."
-                                    oninput="filterTagPills(this.value)"
-                                    class="tag-quick-input"
-                                >
-                                <button
-                                    type="button"
-                                    id="clearTagSearchBtn"
-                                    class="tag-clear-search-btn"
-                                    onclick="clearTagSearch()"
-                                    style="display: none;"
-                                    title="Bersihkan pencarian tag"
-                                >&times;</button>
-                            </div>
-
-                            <button
-                                type="button"
-                                id="resetTagsOnlyBtn"
-                                class="tag-reset-only-btn"
-                                onclick="resetAllTags()"
-                                {% if not include_tags and not exclude_tags %}disabled{% endif %}
-                            >
-                                Reset Tags
-                            </button>
-                        </div>
-
-                        <div class="tags-legend-row" id="tagsLegendRow">
-                            Klik 1x: <strong class="legend-inc">Include (+)</strong> &bull;
-                            Klik 2x: <strong class="legend-exc">Exclude (-)</strong> &bull;
-                            Klik 3x: <strong class="legend-neu">Netral</strong>
-                        </div>
-
-                        <div id="tagGroupsContainer">
-                            {% for group_name, tags in tag_groups.items() %}
-                            <div class="tag-group-block" data-has-items="{{ '1' if tags else '0' }}">
-                                <div class="tag-group-title">{{ group_name }}</div>
-                                {% if tags %}
-                                    <div class="tag-pills-grid">
-                                        {% for tag in tags %}
-                                            {% set state = 'include' if tag['key'] in include_tags else ('exclude' if tag['key'] in exclude_tags else 'neutral') %}
-                                            <button
-                                                type="button"
-                                                class="tri-tag-pill state-{{ state }}"
-                                                data-key="{{ tag['key'] }}"
-                                                data-label="{{ tag['label']|lower }}"
-                                                data-raw-label="{{ tag['label'] }}"
-                                                data-state="{{ state }}"
-                                                onclick="cycleTagState(this)"
-                                            >
-                                                <span class="pill-prefix">{% if state == 'include' %}+ {% elif state == 'exclude' %}- {% endif %}</span>{{ tag['label'] }}
-                                            </button>
-                                        {% endfor %}
-                                    </div>
-                                {% else %}
-                                    <p class="tag-empty-text">Belum ada data di kamus database.</p>
-                                {% endif %}
-                            </div>
-                            {% endfor %}
-                        </div>
-
-                        <div class="tag-no-match-notice" id="tagNoMatchNotice" style="display: none;">
-                            Tidak ditemukan tag yang cocok dengan kata kunci tersebut.
-                        </div>
-                    </div>
-                </form>
+                    {% endfor %}
+                </div>
             </div>
-
-            <!-- RAK BUKU PER JENIS TANAMAN -->
-            {% if not grouped_plants %}
-                <div class="bookshelf-wrapper">
-                    <div class="shelf-label">Arsip Inventaris</div>
-                    <div class="bookshelf empty-shelf">
-                        <div class="empty-library-notice">
-                            {% if search_query or include_tags or exclude_tags %}
-                                <h3>Tidak Ada Tanaman yang Cocok</h3>
-                                <p>Tidak ditemukan catatan tanaman untuk kombinasi nama atau filter tag yang dipilih.</p>
-                            {% else %}
-                                <h3>Rak Perpustakaan Masih Kosong</h3>
-                                <p>Database SQLite telah siap. Belum ada entri tanaman yang tercatat di dalam sistem.</p>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            {% else %}
-                {% for jenis_tanaman, daftar_tanaman in grouped_plants.items() %}
-                <div class="bookshelf-wrapper">
-                    <div class="shelf-label">{{ jenis_tanaman }}</div>
-                    <div class="bookshelf">
-                        <div class="books">
-                            {% for tanaman in daftar_tanaman %}
-                            <a href="{{ url_for('plants.detail', uid=tanaman['uid']) }}" class="book" onclick="bukaBukuAnimasi(event, this)">
-
-                                <!-- Efek cahaya grimoire -->
-                                <div class="magic-glow"></div>
-
-                                <div class="book-cover-full">
-                                    {% if tanaman['photo_filename'] %}
-                                        <img src="{{ url_for('static', filename='images/' ~ tanaman['photo_filename']) }}" alt="{{ tanaman['name'] }}">
-                                    {% else %}
-                                        <img src="https://via.placeholder.com/90x90/388e3c/fff?text={{ tanaman['name'] | urlencode }}" alt="{{ tanaman['name'] }}">
-                                    {% endif %}
-
-                                    <h4>{{ tanaman['name'] }}</h4>
-                                    <p class="latin-name">{{ tanaman['sector_name'] }} - {{ tanaman['subsector_name'] }}</p>
-                                    <p class="lang-info" style="margin-top: 10px; background-color: {% if tanaman['status'] == 'Hidup' %}#c8e6c9{% else %}#ffcdd2{% endif %}; color: #333;">
-                                        Status: {{ tanaman['status'] }}
-                                    </p>
-                                </div>
-                            </a>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
             {% endif %}
 
+            {% if active_sectors %}
+            <div class="shelf-row">
+                <span class="shelf-row-label">Rak Sektor Lokasi:</span>
+                <div class="shelf-pills">
+                    <button
+                        type="button"
+                        class="shelf-pill sector-pill {% if not selected_sector %}active{% endif %}"
+                        onclick="applyQuickFilter('sector', '')"
+                    >
+                        Semua Sektor
+                    </button>
+                    {% for sec in active_sectors %}
+                        <button
+                            type="button"
+                            class="shelf-pill sector-pill {% if selected_sector == sec['code'] %}active{% endif %}"
+                            onclick="applyQuickFilter('sector', '{{ sec['code'] }}')"
+                        >
+                            {{ sec['name'] }} <small>({{ sec['plant_count'] }})</small>
+                        </button>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </section>
+        {% endif %}
+
+        <!-- FORM PENCARIAN REGULER, SORTING & ADVANCED SEARCH -->
+        <form method="GET" action="{{ url_for('main.index') }}" id="catalogFilterForm" class="search-toolbar">
+            <div class="regular-search-row">
+                <div class="search-input-wrap">
+                    <input
+                        type="text"
+                        name="q"
+                        id="regularSearchInput"
+                        value="{{ search_query }}"
+                        placeholder="Cari nama umum, nama ilmiah, kode tanaman, atau UID..."
+                        aria-label="Cari tanaman"
+                    >
+                </div>
+
+                <div class="sort-select-wrap">
+                    <label for="sortSelect" class="sr-only">Urutkan</label>
+                    <select name="sort" id="sortSelect" onchange="this.form.submit()">
+                        <option value="name_asc" {% if sort_by == 'name_asc' %}selected{% endif %}>Urutkan: Nama A–Z</option>
+                        <option value="name_desc" {% if sort_by == 'name_desc' %}selected{% endif %}>Urutkan: Nama Z–A</option>
+                        <option value="location" {% if sort_by == 'location' %}selected{% endif %}>Urutkan: Lokasi</option>
+                        <option value="newest" {% if sort_by == 'newest' %}selected{% endif %}>Urutkan: Terbaru Ditambahkan</option>
+                    </select>
+                </div>
+
+                <button
+                    type="button"
+                    class="btn-advanced-toggle"
+                    id="toggleAdvancedBtn"
+                    aria-expanded="{{ 'true' if (selected_subsector or selected_status or selected_family) else 'false' }}"
+                    aria-controls="advancedSearchDrawer"
+                    onclick="toggleAdvancedDrawer()"
+                >
+                    Filter Lanjutan &#9662;
+                </button>
+
+                <button type="submit" class="btn-search-submit">Cari</button>
+            </div>
+
+            <!-- DRAWER / PANEL ADVANCED SEARCH -->
+            <div
+                class="advanced-search-drawer {% if selected_subsector or selected_status or selected_family %}open{% endif %}"
+                id="advancedSearchDrawer"
+            >
+                <div class="advanced-grid">
+                    <div class="filter-field">
+                        <label for="filterSector">Sektor Sekolah</label>
+                        <select name="sector" id="filterSector" onchange="filterSubsectorOptions()">
+                            <option value="">Semua Sektor</option>
+                            {% for sec in active_sectors %}
+                                <option value="{{ sec['code'] }}" {% if selected_sector == sec['code'] %}selected{% endif %}>
+                                    {{ sec['name'] }} ({{ sec['code'] }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="filter-field">
+                        <label for="filterSubsector">Subsektor Spesifik</label>
+                        <select name="subsector" id="filterSubsector">
+                            <option value="">Semua Subsektor</option>
+                            {% for sub in filter_options['subsectors'] %}
+                                <option
+                                    value="{{ sub['id'] }}"
+                                    data-sector="{{ sub['sector_code'] }}"
+                                    {% if selected_subsector == (sub['id']|string) %}selected{% endif %}
+                                >
+                                    {{ sub['sector_name'] }} — {{ sub['name'] }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="filter-field">
+                        <label for="filterType">Jenis Tanaman (Fungsional)</label>
+                        <select name="type" id="filterType">
+                            <option value="">Semua Jenis</option>
+                            {% for pt in active_types %}
+                                <option value="{{ pt['code'] }}" {% if selected_type == pt['code'] %}selected{% endif %}>
+                                    {{ pt['name'] }} ({{ pt['code'] }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="filter-field">
+                        <label for="filterStatus">Kondisi / Status</label>
+                        <select name="status" id="filterStatus">
+                            <option value="">Semua Kondisi</option>
+                            {% for st in filter_options['statuses'] %}
+                                <option value="{{ st }}" {% if selected_status == st %}selected{% endif %}>
+                                    {{ st }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="filter-field">
+                        <label for="filterFamily">Taksonomi (Famili)</label>
+                        <select name="family" id="filterFamily">
+                            <option value="">Semua Famili</option>
+                            {% for fam in filter_options['families'] %}
+                                <option value="{{ fam }}" {% if selected_family == fam %}selected{% endif %}>
+                                    {{ fam }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="advanced-actions">
+                    <button type="submit" class="btn-search-submit">Terapkan Filter</button>
+                    <a href="{{ url_for('main.index') }}" class="btn-reset-all">Hapus Semua Filter</a>
+                </div>
+            </div>
+        </form>
+
+        <!-- ACTIVE FILTER INDICATORS (CHIPS YANG DAPAT DIHAPUS SATUAN) -->
+        {% if active_chips %}
+        <div class="active-filters-bar" aria-label="Filter yang sedang aktif">
+            <span class="active-filters-label">Filter Aktif:</span>
+            <div class="active-chips-list">
+                {% for chip in active_chips %}
+                    <button
+                        type="button"
+                        class="filter-chip"
+                        onclick="removeSingleFilter('{{ chip['param'] }}')"
+                        title="Hapus filter ini"
+                    >
+                        <span>{{ chip['label'] }}</span>
+                        <span class="chip-x" aria-hidden="true">&times;</span>
+                    </button>
+                {% endfor %}
+            </div>
+            <a href="{{ url_for('main.index') }}" class="clear-all-chips-link">Hapus Semua</a>
         </div>
-    </div>
+        {% endif %}
+
+        <!-- GRID KARTU TANAMAN PENGUNJUNG -->
+        {% if not plants %}
+            <div class="empty-catalog-state">
+                <h3>Tidak Ada Tanaman Ditemukan</h3>
+                <p>Tidak ada individu tanaman yang sesuai dengan kriteria pencarian atau filter saat ini.</p>
+                {% if active_chips %}
+                    <a href="{{ url_for('main.index') }}" class="btn-search-submit" style="margin-top: 14px; display: inline-block; text-decoration: none;">
+                        Tampilkan Semua Tanaman
+                    </a>
+                {% endif %}
+            </div>
+        {% else %}
+            <section class="plant-cards-grid" aria-label="Daftar kartu tanaman">
+                {% for tanaman in plants %}
+                <a href="{{ url_for('plants.detail', uid=tanaman['uid']) }}" class="plant-card">
+                    <div class="plant-card-media">
+                        {% if tanaman['photo_filename'] %}
+                            <img
+                                src="{{ url_for('static', filename='images/' ~ tanaman['photo_filename']) }}"
+                                alt="Foto {{ tanaman['name'] }}"
+                                loading="lazy"
+                            >
+                        {% else %}
+                            <div class="plant-card-no-photo">Foto Belum Tersedia</div>
+                        {% endif %}
+                        <span class="card-type-badge">{{ tanaman['plant_type_name'] }}</span>
+                    </div>
+
+                    <div class="plant-card-body">
+                        <div class="card-code-row">
+                            <code class="card-plant-code">{{ tanaman['plant_code'] }}</code>
+                            <span class="card-status-dot status-{{ tanaman['status']|lower|replace(' ', '-') }}">
+                                {{ tanaman['status'] }}
+                            </span>
+                        </div>
+
+                        <h2 class="card-plant-name">{{ tanaman['name'] }}</h2>
+
+                        {% if tanaman['scientific_name'] %}
+                            <p class="card-scientific-name"><em>{{ tanaman['scientific_name'] }}</em></p>
+                        {% endif %}
+
+                        <p class="card-location-text">
+                            &#128205; {{ tanaman['sector_name'] }} &mdash; {{ tanaman['subsector_name'] }}
+                        </p>
+                    </div>
+                </a>
+                {% endfor %}
+            </section>
+        {% endif %}
+    </main>
 
     <script>
-        function bukaPintu() {
-            const treeScene = document.getElementById('tree-scene');
-            if (!treeScene) return;
-            treeScene.classList.add('zoom-in-hidden');
-            setTimeout(() => { treeScene.style.display = 'none'; }, 1200);
+        function toggleAdvancedDrawer() {
+            const drawer = document.getElementById('advancedSearchDrawer');
+            const btn = document.getElementById('toggleAdvancedBtn');
+            const isOpen = drawer.classList.toggle('open');
+            btn.setAttribute('aria-expanded', String(isOpen));
         }
 
-        function toggleTagsDropdown() {
-            const panel = document.getElementById('tagsDropdownPanel');
-            panel.classList.toggle('open');
-        }
-
-        // 3-State Tag Cycle: neutral -> include (+) -> exclude (-) -> neutral
-        function cycleTagState(btn) {
-            const current = btn.dataset.state;
-            let next = 'neutral';
-            if (current === 'neutral') {
-                next = 'include';
-            } else if (current === 'include') {
-                next = 'exclude';
+        function applyQuickFilter(paramName, value) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('inc');
+            url.searchParams.delete('exc');
+            url.searchParams.delete('masuk');
+            if (value) {
+                url.searchParams.set(paramName, value);
+                if (paramName === 'sector') {
+                    url.searchParams.delete('subsector');
+                }
             } else {
-                next = 'neutral';
-            }
-
-            applyPillState(btn, next);
-            syncHiddenTagInputsAndBadges();
-        }
-
-        function applyPillState(btn, state) {
-            btn.dataset.state = state;
-            btn.classList.remove('state-neutral', 'state-include', 'state-exclude');
-            btn.classList.add(`state-${state}`);
-
-            const prefixEl = btn.querySelector('.pill-prefix');
-            if (prefixEl) {
-                if (state === 'include') {
-                    prefixEl.textContent = '+ ';
-                } else if (state === 'exclude') {
-                    prefixEl.textContent = '- ';
-                } else {
-                    prefixEl.textContent = '';
+                url.searchParams.delete(paramName);
+                if (paramName === 'sector') {
+                    url.searchParams.delete('subsector');
                 }
             }
+            window.location.href = url.toString();
         }
 
-        function syncHiddenTagInputsAndBadges() {
-            const container = document.getElementById('hiddenTagInputs');
-            container.innerHTML = '';
+        function removeSingleFilter(paramName) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete(paramName);
+            if (paramName === 'sector') {
+                url.searchParams.delete('subsector');
+            }
+            url.searchParams.delete('inc');
+            url.searchParams.delete('exc');
+            window.location.href = url.toString();
+        }
 
-            let incCount = 0;
-            let excCount = 0;
-
-            document.querySelectorAll('.tri-tag-pill').forEach(btn => {
-                const state = btn.dataset.state;
-                const key = btn.dataset.key;
-                if (state === 'include' || state === 'exclude') {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = state === 'include' ? 'inc' : 'exc';
-                    input.value = key;
-                    container.appendChild(input);
-
-                    if (state === 'include') incCount++;
-                    if (state === 'exclude') excCount++;
-                }
+        function filterSubsectorOptions() {
+            const sectorVal = document.getElementById('filterSector').value;
+            const subSelect = document.getElementById('filterSubsector');
+            Array.from(subSelect.options).forEach(opt => {
+                if (!opt.value) return;
+                const optSector = opt.dataset.sector || '';
+                opt.hidden = Boolean(sectorVal && optSector !== sectorVal);
             });
-
-            // Perbarui indikator +N dan -N secara langsung pada tombol Filter Tags
-            const incBadge = document.getElementById('incCountBadge');
-            const excBadge = document.getElementById('excCountBadge');
-            if (incBadge) {
-                incBadge.textContent = `+${incCount}`;
-                incBadge.style.display = incCount > 0 ? 'inline-block' : 'none';
-            }
-            if (excBadge) {
-                excBadge.textContent = `-${excCount}`;
-                excBadge.style.display = excCount > 0 ? 'inline-block' : 'none';
-            }
-
-            // Aktif/nonaktifkan tombol Reset Tags di dalam panel
-            const resetBtn = document.getElementById('resetTagsOnlyBtn');
-            if (resetBtn) {
-                resetBtn.disabled = (incCount === 0 && excCount === 0);
+            if (subSelect.selectedOptions[0] && subSelect.selectedOptions[0].hidden) {
+                subSelect.value = '';
             }
         }
 
-        function resetAllTags() {
-            document.querySelectorAll('.tri-tag-pill').forEach(btn => {
-                applyPillState(btn, 'neutral');
-            });
-            syncHiddenTagInputsAndBadges();
-        }
-
-        function clearTagSearch() {
-            const input = document.getElementById('tagQuickFilter');
-            if (input) {
-                input.value = '';
-                filterTagPills('');
-                input.focus();
-            }
-        }
-
-        // Saring tag saat mengetik dan sembunyikan kategori/elemen yang tidak relevan
-        function filterTagPills(keyword) {
-            const q = keyword.trim().toLowerCase();
-            const isSearching = q.length > 0;
-
-            const clearBtn = document.getElementById('clearTagSearchBtn');
-            if (clearBtn) {
-                clearBtn.style.display = isSearching ? 'inline-flex' : 'none';
-            }
-
-            // Sembunyikan legenda bantuan saat mencari agar tampilan fokus pada hasil relevan
-            const legendRow = document.getElementById('tagsLegendRow');
-            if (legendRow) {
-                legendRow.style.display = isSearching ? 'none' : 'block';
-            }
-
-            let totalVisibleGroups = 0;
-
-            document.querySelectorAll('.tag-group-block').forEach(group => {
-                const pills = group.querySelectorAll('.tri-tag-pill');
-                const emptyText = group.querySelector('.tag-empty-text');
-                let visibleInGroup = 0;
-
-                pills.forEach(btn => {
-                    const label = btn.dataset.label || '';
-                    const match = label.includes(q);
-                    btn.style.display = match ? 'inline-flex' : 'none';
-                    if (match) visibleInGroup++;
-                });
-
-                if (isSearching) {
-                    // Saat mencari, sembunyikan seluruh grup yang tidak memiliki tag cocok
-                    const showGroup = visibleInGroup > 0;
-                    group.style.display = showGroup ? 'block' : 'none';
-                    if (emptyText) emptyText.style.display = 'none';
-                    if (showGroup) totalVisibleGroups++;
-                } else {
-                    // Saat tidak mencari, tampilkan kembali semua grup normal
-                    group.style.display = 'block';
-                    if (emptyText) emptyText.style.display = 'block';
-                    totalVisibleGroups++;
-                }
-            });
-
-            const noMatchNotice = document.getElementById('tagNoMatchNotice');
-            if (noMatchNotice) {
-                noMatchNotice.style.display = (isSearching && totalVisibleGroups === 0) ? 'block' : 'none';
-            }
-        }
-
-        function bukaBukuAnimasi(event, element) {
-            event.preventDefault();
-            const url = element.getAttribute('href');
-            const transitionScreen = document.getElementById('page-transition');
-
-            document.body.classList.add('animasi-berjalan');
-
-            const rect = element.getBoundingClientRect();
-            const bookCenterX = rect.left + (rect.width / 2);
-            const bookCenterY = rect.top + (rect.height / 2);
-
-            const screenCenterX = window.innerWidth / 2;
-            const screenCenterY = window.innerHeight / 2;
-
-            const kompensasiRusuk = 90;
-            const moveX = screenCenterX - bookCenterX + kompensasiRusuk;
-            const moveY = screenCenterY - bookCenterY;
-
-            element.style.setProperty('--to-center-x', `${moveX}px`);
-            element.style.setProperty('--to-center-y', `${moveY}px`);
-
-            element.classList.add('is-opening');
-
-            setTimeout(() => { transitionScreen.classList.add('fade-out-active'); }, 2600);
-            setTimeout(() => { window.location.href = url; }, 3000);
-        }
+        filterSubsectorOptions();
     </script>
 </body>
 </html>

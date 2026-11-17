@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manajemen Inventaris Pengurus — Proyek Adiwiyata</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='catalog.css') }}">
+    <style>
+        .inv-table-wrap {
+            background: var(--cream-card);
+            border: 1px solid var(--border-soft);
+            border-radius: 14px;
+            overflow-x: auto;
+        }
+        .inv-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        .inv-table th, .inv-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border-soft);
+            text-align: left;
+            vertical-align: middle;
+        }
+        .inv-table th {
+            background-color: var(--sage-tint);
+            color: var(--forest-deep);
+            font-weight: 700;
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .inv-thumb {
+            width: 52px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid var(--border-soft);
+        }
+        .inv-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .btn-mini {
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-decoration: none;
+            border: 1px solid var(--border-soft);
+            cursor: pointer;
+            background: #fff;
+            color: var(--forest-deep);
+        }
+        .btn-mini.edit {
+            border-color: #1565c0;
+            color: #1565c0;
+        }
+        .btn-mini.del {
+            border-color: #c62828;
+            color: #c62828;
+        }
+        .badge-split-warn {
+            display: inline-block;
+            margin-top: 4px;
+            padding: 2px 7px;
+            border-radius: 4px;
+            background: #fff3cd;
+            color: #856404;
+            font-size: 0.74rem;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <header class="catalog-navbar">
+        <div class="container nav-inner">
+            <a href="{{ url_for('main.home') }}" class="nav-brand">
+                <span aria-hidden="true">&#127807;</span>
+                <span>Inventaris Adiwiyata</span>
+            </a>
+            <nav class="nav-links">
+                <span style="font-size: 0.85rem; color: var(--ink-muted);">
+                    Petugas: <strong>{{ g.user['full_name'] }}</strong> ({{ g.user['manager_code'] or 'Guru' }})
+                </span>
+                <a href="{{ url_for('main.index') }}">Lihat Katalog Pengunjung</a>
+                <a href="{{ url_for('plants.add_plant') }}" class="btn-nav-manager">+ Tambah Individu</a>
+                <a href="{{ url_for('auth.logout') }}" class="btn-nav-outline">Keluar</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container catalog-main">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div style="padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; background: #e8f5e9; border: 1px solid #66bb6a; color: #1b5e20;">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <section class="catalog-hero-bar">
+            <div>
+                <span class="eyebrow">Panel Administrasi Pengurus</span>
+                <h1>Inventaris Individual Tanaman</h1>
+                <p>Setiap baris merepresentasikan 1 individu tanaman dengan UID dan foto unik.</p>
+            </div>
+            <div class="catalog-counter-pill">
+                Total Tercatat: <strong>{{ items|length }}</strong> individu
+            </div>
+        </section>
+
+        <form method="GET" action="{{ url_for('main.inventory') }}" class="search-toolbar">
+            <div class="regular-search-row">
+                <div class="search-input-wrap">
+                    <input type="text" name="q" value="{{ search_query }}" placeholder="Cari nama, kode ID, subsektor, atau UID...">
+                </div>
+                <div class="sort-select-wrap">
+                    <select name="sector">
+                        <option value="">Semua Sektor</option>
+                        {% for sec in filter_options['sectors'] %}
+                            <option value="{{ sec['code'] }}" {% if selected_sector == sec['code'] %}selected{% endif %}>{{ sec['name'] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="sort-select-wrap">
+                    <select name="type">
+                        <option value="">Semua Jenis</option>
+                        {% for pt in filter_options['plant_types'] %}
+                            <option value="{{ pt['code'] }}" {% if selected_type == pt['code'] %}selected{% endif %}>{{ pt['name'] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="sort-select-wrap">
+                    <select name="status">
+                        <option value="">Semua Kondisi</option>
+                        {% for st in filter_options['statuses'] %}
+                            <option value="{{ st }}" {% if selected_status == st %}selected{% endif %}>{{ st }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn-search-submit">Filter</button>
+                <a href="{{ url_for('main.inventory') }}" class="btn-advanced-toggle" style="display: inline-flex; align-items: center; text-decoration: none;">Reset</a>
+            </div>
+        </form>
+
+        <div class="inv-table-wrap">
+            <table class="inv-table">
+                <thead>
+                    <tr>
+                        <th>Foto</th>
+                        <th>Kode ID &amp; UID</th>
+                        <th>Nama Tanaman</th>
+                        <th>Jenis</th>
+                        <th>Lokasi (Sektor / Subsektor)</th>
+                        <th>Kondisi</th>
+                        <th>PJ</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if not items %}
+                        <tr>
+                            <td colspan="8" style="text-align: center; padding: 32px; color: var(--ink-muted);">
+                                Belum ada data individu tanaman yang sesuai filter.
+                            </td>
+                        </tr>
+                    {% else %}
+                        {% for item in items %}
+                        <tr>
+                            <td>
+                                {% if item['photo_filename'] %}
+                                    <img src="{{ url_for('static', filename='images/' ~ item['photo_filename']) }}" alt="{{ item['name'] }}" class="inv-thumb">
+                                {% else %}
+                                    <span style="font-size: 0.75rem; color: #999;">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <code>{{ item['plant_code'] }}</code><br>
+                                <small style="color: var(--ink-muted); font-size: 0.72rem;">{{ item['uid'] }}</small>
+                                {% if item['needs_individual_split'] == 1 %}
+                                    <br><span class="badge-split-warn">Data lama qty={{ item['quantity'] }} (perlu dipisah manual)</span>
+                                {% endif %}
+                            </td>
+                            <td><strong>{{ item['name'] }}</strong></td>
+                            <td>{{ item['plant_type_name'] }}</td>
+                            <td>{{ item['sector_name'] }} &mdash; {{ item['subsector_name'] }}</td>
+                            <td>
+                                <span class="card-status-dot status-{{ item['status']|lower|replace(' ', '-') }}">
+                                    {{ item['status'] }}
+                                </span>
+                            </td>
+                            <td>{{ item['manager_code'] }}</td>
+                            <td>
+                                <div class="inv-actions">
+                                    <a href="{{ url_for('plants.detail', uid=item['uid']) }}" class="btn-mini">Detail</a>
+                                    <a href="{{ url_for('plants.manage_plant', uid=item['uid']) }}" class="btn-mini edit">Kelola</a>
+                                    <form method="POST" action="{{ url_for('plants.delete_plant', uid=item['uid']) }}" onsubmit="return confirm('Hapus permanen individu {{ item['name'] }} ({{ item['plant_code'] }})?');">
+                                        <button type="submit" class="btn-mini del">Hapus</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </main>
+</body>
+</html>
