@@ -2,8 +2,6 @@
 
 Website Adiwiyata
 
-sing ngebug ki ning services/
-
 Website ini dibuat oleh:
 -
 - Ananda Favian Malvin          XI-8 / 05  
