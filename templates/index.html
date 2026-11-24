@@ -12,7 +12,73 @@
 
     {% if not skip_intro %}
     <div id="tree-scene">
-        <div class="door" onclick="bukaPintu()">Masuk</div>
+        <main class="portal-viewport" aria-label="Portal Pohon Pengetahuan">
+            <div class="canopy-sunbeams"></div>
+            <div class="floating-spores" aria-hidden="true">
+                <span></span><span></span><span></span>
+                <span></span><span></span><span></span>
+            </div>
+
+            <header class="portal-intro">
+                <span class="portal-eyebrow">Portal Inventaris Adiwiyata</span>
+                <h1 class="portal-heading">Pohon Pengetahuan</h1>
+                <p class="portal-sub">Buka pintu pohon untuk menjelajahi arsip tanaman sekolah</p>
+            </header>
+
+            <section class="tree-sanctuary" aria-label="Pohon utama">
+                <div class="tree-camera-rig">
+                    <svg class="ancient-tree-svg" viewBox="0 0 900 760" role="img" aria-label="Pohon tua bertabur dedaunan">
+                        <defs>
+                            <linearGradient id="trunkGradient" x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0" stop-color="#76543a"/>
+                                <stop offset="0.55" stop-color="#4b3422"/>
+                                <stop offset="1" stop-color="#302116"/>
+                            </linearGradient>
+                            <radialGradient id="leafGradient">
+                                <stop offset="0" stop-color="#789b70"/>
+                                <stop offset="1" stop-color="#31543a"/>
+                            </radialGradient>
+                        </defs>
+                        <ellipse cx="450" cy="728" rx="300" ry="27" fill="#0d1a12" opacity=".55"/>
+                        <path d="M390 690 C398 590 384 500 370 420 C356 348 384 268 432 214 C470 172 535 174 566 220 C602 274 602 352 572 430 C548 493 548 610 570 690 Z"
+                              fill="url(#trunkGradient)" stroke="#2b2118" stroke-width="10"/>
+                        <path d="M430 690 C438 590 438 500 424 420 C408 330 438 252 482 205" fill="none" stroke="#9a7652" stroke-width="8" opacity=".34"/>
+                        <path d="M480 650 C474 536 470 440 500 348" fill="none" stroke="#261d16" stroke-width="12" opacity=".35"/>
+                        <path d="M430 300 C350 266 286 210 238 138" fill="none" stroke="#4b3422" stroke-width="38" stroke-linecap="round"/>
+                        <path d="M478 294 C568 260 641 198 692 128" fill="none" stroke="#4b3422" stroke-width="42" stroke-linecap="round"/>
+                        <path d="M404 378 C290 350 210 324 150 270" fill="none" stroke="#4b3422" stroke-width="28" stroke-linecap="round"/>
+                        <path d="M536 374 C642 350 726 318 790 260" fill="none" stroke="#4b3422" stroke-width="28" stroke-linecap="round"/>
+
+                        <g fill="url(#leafGradient)" stroke="#20392a" stroke-width="4">
+                            <circle cx="180" cy="184" r="118"/><circle cx="300" cy="122" r="132"/>
+                            <circle cx="450" cy="105" r="142"/><circle cx="610" cy="128" r="132"/>
+                            <circle cx="730" cy="198" r="120"/><circle cx="250" cy="270" r="112"/>
+                            <circle cx="650" cy="276" r="118"/><circle cx="450" cy="230" r="150"/>
+                        </g>
+                        <g fill="#91ac75" opacity=".48">
+                            <circle cx="250" cy="98" r="42"/><circle cx="430" cy="62" r="48"/>
+                            <circle cx="610" cy="82" r="40"/><circle cx="708" cy="168" r="34"/>
+                            <circle cx="165" cy="170" r="38"/>
+                        </g>
+                    </svg>
+
+                    <div class="tree-doorway-frame">
+                        <div class="door-interior-glow"></div>
+                        <button class="wooden-portal-door" type="button" onclick="bukaPintu()" aria-label="Masuk ke arsip tanaman">
+                            <span class="door-arch-trim"></span>
+                            <span class="door-botanical-crest">✦</span>
+                            <span class="door-handle"></span>
+                            <span class="door-action-tag">Masuk</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <footer class="portal-footer">
+                <a href="/?masuk=1" class="portal-skip-link">Lewati pintu dan lihat arsip</a>
+            </footer>
+            <div class="portal-curtain"></div>
+        </main>
     </div>
     {% endif %}
 
@@ -174,7 +240,7 @@
                     <div class="bookshelf">
                         <div class="books">
                             {% for tanaman in daftar_tanaman %}
-                            <a href="{{ url_for('plants.detail', uid=tanaman['uid']) }}" class="book" onmouseenter="positionBookCover(this)" onmouseleave="resetBookCover(this)" onclick="bukaBukuAnimasi(event, this)">
+                            <a href="{{ url_for('plants.detail', uid=tanaman['uid']) }}" class="book" onclick="bukaBukuAnimasi(event, this)">
 
                                 <!-- Efek cahaya grimoire -->
                                 <div class="magic-glow"></div>
@@ -186,11 +252,15 @@
                                         <img src="https://via.placeholder.com/90x90/388e3c/fff?text={{ tanaman['name'] | urlencode }}" alt="{{ tanaman['name'] }}">
                                     {% endif %}
 
-                                    <h4>{{ tanaman['name'] }}</h4>
-                                    <p class="latin-name">{{ tanaman['sector_name'] }} - {{ tanaman['subsector_name'] }}</p>
-                                    <p class="lang-info" style="margin-top: 10px; background-color: {% if tanaman['status'] == 'Hidup' %}#c8e6c9{% else %}#ffcdd2{% endif %}; color: #333;">
-                                        Status: {{ tanaman['status'] }}
-                                    </p>
+                                    <div class="book-cover-details">
+                                        <span class="book-cover-category">{{ tanaman['plant_type_name'] }}</span>
+                                        <h4>{{ tanaman['name'] }}</h4>
+                                        <p class="book-cover-location">{{ tanaman['sector_name'] }} — {{ tanaman['subsector_name'] }}</p>
+                                        <p class="book-cover-manager">{{ tanaman['manager_code'] }} · {{ tanaman['manager_name'] or 'Penanggung jawab' }}</p>
+                                        <span class="book-cover-status {% if tanaman['status'] == 'Hidup' %}is-healthy{% endif %}">
+                                            {{ tanaman['status'] }}
+                                        </span>
+                                    </div>
                                 </div>
                             </a>
                             {% endfor %}
@@ -210,8 +280,11 @@
         function bukaPintu() {
             const treeScene = document.getElementById('tree-scene');
             if (!treeScene) return;
-            treeScene.classList.add('zoom-in-hidden');
-            setTimeout(() => { treeScene.style.display = 'none'; }, 1200);
+            const portal = treeScene.querySelector('.portal-viewport');
+            const curtain = treeScene.querySelector('.portal-curtain');
+            portal.classList.add('is-entering');
+            setTimeout(() => curtain.classList.add('active'), 700);
+            setTimeout(() => { treeScene.style.display = 'none'; }, 1300);
         }
 
         function toggleTagsDropdown() {
@@ -357,31 +430,6 @@
             if (noMatchNotice) {
                 noMatchNotice.style.display = (isSearching && totalVisibleGroups === 0) ? 'block' : 'none';
             }
-        }
-
-        function positionBookCover(book) {
-            const cover = book.querySelector('.book-cover-full');
-            const books = book.closest('.books');
-            if (!cover || !books) return;
-
-            const containerRect = books.getBoundingClientRect();
-            const bookRect = book.getBoundingClientRect();
-            const coverWidth = cover.offsetWidth;
-            const inset = 8;
-            const minLeft = containerRect.left + inset;
-            const maxLeft = Math.max(minLeft, containerRect.right - coverWidth - inset);
-            const desiredLeft = bookRect.left + (bookRect.width - coverWidth) / 2;
-            const visibleLeft = Math.min(Math.max(desiredLeft, minLeft), maxLeft);
-
-            cover.style.left = `${visibleLeft - bookRect.left}px`;
-            cover.style.right = 'auto';
-        }
-
-        function resetBookCover(book) {
-            const cover = book.querySelector('.book-cover-full');
-            if (!cover) return;
-            cover.style.left = '';
-            cover.style.right = '';
         }
 
         function bukaBukuAnimasi(event, element) {
